@@ -145,6 +145,11 @@ void attitudeControllerResetPitchAttitudePID(void)
     pidReset(&pidPitch);
 }
 
+void attitudeControllerResetYawAttitudePID(void)
+{
+    pidReset(&pidYaw);
+}
+
 void attitudeControllerResetAllPID(void)
 {
   pidReset(&pidRoll);

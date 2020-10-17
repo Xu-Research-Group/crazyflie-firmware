@@ -70,7 +70,7 @@ void controllerPid(control_t *control, setpoint_t *setpoint,
       attitudeDesired.yaw = setpoint->attitude.yaw;
     }
 
-    attitudeDesired.yaw = capAngle(attitudeDesired.yaw);
+    attitudeDesired.yaw = capAngle(attitudeDesired.yaw); // Limit to 1 yaw rotation
   }
 
   if (RATE_DO_EXECUTE(POSITION_RATE, tick)) {
@@ -102,16 +102,21 @@ void controllerPid(control_t *control, setpoint_t *setpoint,
       rateDesired.pitch = setpoint->attitudeRate.pitch;
       attitudeControllerResetPitchAttitudePID();
     }
+    // Reset yaw if velocity mode also, ovewrite rateDesired
+    if (setpoint->mode.yaw == modeVelocity) {
+      rateDesired.yaw = setpoint->attitudeRate.yaw;
+      attitudeControllerResetYawAttitudePID();
+    }
 
     // TODO: Investigate possibility to subtract gyro drift.
-    attitudeControllerCorrectRatePID(sensors->gyro.x, -sensors->gyro.y, sensors->gyro.z,
+    attitudeControllerCorrectRatePID(sensors->gyro.x, -sensors->gyro.y, -sensors->gyro.z,
                              rateDesired.roll, rateDesired.pitch, rateDesired.yaw);
 
     attitudeControllerGetActuatorOutput(&control->roll,
                                         &control->pitch,
                                         &control->yaw);
 
-    control->yaw = -control->yaw;
+    //control->yaw = -control->yaw;
 
     cmd_thrust = control->thrust;
     cmd_roll = control->roll;
