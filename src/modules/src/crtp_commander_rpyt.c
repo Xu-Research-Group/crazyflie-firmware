@@ -67,9 +67,9 @@ typedef enum
   XMODE     = 2, // X-mode. M1 & M4 are defined as front
 } YawModeType;
 
-static RPYType stabilizationModeRoll  = RATE; // Current stabilization type of roll (rate or angle)
-static RPYType stabilizationModePitch = RATE; // Current stabilization type of pitch (rate or angle)
-static RPYType stabilizationModeYaw   = RATE;  // Current stabilization type of yaw (rate or angle)
+static RPYType stabilizationModeRoll  = ANGLE; // Current stabilization type of roll (rate or angle)
+static RPYType stabilizationModePitch = ANGLE; // Current stabilization type of pitch (rate or angle)
+static RPYType stabilizationModeYaw   = ANGLE;  // Current stabilization type of yaw (rate or angle)
 
 static YawModeType yawMode = DEFAULT_YAW_MODE; // Yaw mode configuration
 static bool carefreeResetFront;             // Reset what is front in carefree mode
@@ -203,10 +203,8 @@ void crtpCommanderRpytDecodeSetpoint(setpoint_t *setpoint, CRTPPacket *pk)
   // Yaw
   if (!posSetMode) {
     if (stabilizationModeYaw == RATE) {
-      // legacy rate input is inverted
-      setpoint->attitudeRate.yaw = values->yaw; // Remove this negative TEST VF
+      setpoint->attitudeRate.yaw = values->yaw;
       yawModeUpdate(setpoint);
-
       setpoint->mode.yaw = modeVelocity;
     } else {
       setpoint->mode.yaw = modeAbs;
