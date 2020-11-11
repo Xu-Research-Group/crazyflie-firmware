@@ -22,23 +22,11 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  *
- * lighthouse_position_est.h - position estimaton for the lighthouse system
+ * lighthouse_state.h - storage for basestation state struct
  */
 
 #pragma once
 
 #include "pulse_processor.h"
-#include "lighthouse_geometry.h"
 
-
-void lighthousePositionEstInit();
-
-/**
- * @brief Set new base station geometry data
- *
- * @param geometries Pointer to an array of geomtry data with PULSE_PROCESSOR_N_BASE_STATIONS entries.
- */
-void lighthousePositionSetGeometryData(const baseStationGeometry_t* geometries);
-
-void lighthousePositionEstimatePoseCrossingBeams(const pulseProcessor_t *state, pulseProcessorResult_t* angles, int baseStation);
-void lighthousePositionEstimatePoseSweeps(const pulseProcessor_t *state, pulseProcessorResult_t* angles, int baseStation);
+extern pulseProcessor_t lighthouseCoreState;

@@ -34,6 +34,7 @@
 
 #include "ootx_decoder.h"
 #include "lighthouse_calibration.h"
+#include "lighthouse_geometry.h"
 
 #define PULSE_PROCESSOR_N_SWEEPS 2
 #define PULSE_PROCESSOR_N_BASE_STATIONS 2
@@ -107,9 +108,9 @@ typedef struct {
 } pulseProcessorPulse_t;
 
 typedef enum {
-  sweepDirection_x = 0,
-  sweepDirection_y = 1
-} SweepDirection;
+  sweepIdFirst = 0,  // The X sweep in LH 1
+  sweepIdSecond = 1  // The Y sweep in LH 1
+} SweepId_t;
 
 typedef enum {
   sweepStorageStateWaiting = 0,
@@ -150,7 +151,7 @@ typedef struct {
 
   // Base station and axis of the current frame
   int currentBaseStation;
-  SweepDirection currentAxis;
+  SweepId_t currentAxis;
 
   // Sweep timestamps
   struct {
@@ -220,6 +221,8 @@ typedef struct pulseProcessor_s {
 
   ootxDecoderState_t ootxDecoder[PULSE_PROCESSOR_N_BASE_STATIONS];
   lighthouseCalibration_t bsCalibration[PULSE_PROCESSOR_N_BASE_STATIONS];
+  baseStationGeometry_t bsGeometry[PULSE_PROCESSOR_N_BASE_STATIONS];
+  baseStationGeometryCache_t bsGeoCache[PULSE_PROCESSOR_N_BASE_STATIONS];
 
   // Health check data
   uint32_t healthFirstSensorTs;

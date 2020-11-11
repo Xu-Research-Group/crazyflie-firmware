@@ -22,23 +22,17 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  *
- * lighthouse_position_est.h - position estimaton for the lighthouse system
+ * kve_common.h - Common type definition for kve
+ *
  */
 
 #pragma once
 
-#include "pulse_processor.h"
-#include "lighthouse_geometry.h"
+#include <stddef.h>
 
-
-void lighthousePositionEstInit();
-
-/**
- * @brief Set new base station geometry data
- *
- * @param geometries Pointer to an array of geomtry data with PULSE_PROCESSOR_N_BASE_STATIONS entries.
- */
-void lighthousePositionSetGeometryData(const baseStationGeometry_t* geometries);
-
-void lighthousePositionEstimatePoseCrossingBeams(const pulseProcessor_t *state, pulseProcessorResult_t* angles, int baseStation);
-void lighthousePositionEstimatePoseSweeps(const pulseProcessor_t *state, pulseProcessorResult_t* angles, int baseStation);
+typedef struct {
+    size_t memorySize;
+    size_t (*read)(size_t address, void* data, size_t length);
+    size_t (*write)(size_t address, const void* data, size_t length);
+    void (*flush)(void);
+} kveMemory_t;

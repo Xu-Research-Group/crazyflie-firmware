@@ -22,23 +22,25 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  *
- * lighthouse_position_est.h - position estimaton for the lighthouse system
+ * kveStorage.h - Low level storage functions
+ *
  */
 
 #pragma once
 
-#include "pulse_processor.h"
-#include "lighthouse_geometry.h"
+#include "kve/kve_common.h"
 
+#include <stddef.h>
+#include <stdbool.h>
 
-void lighthousePositionEstInit();
+void kveDefrag(kveMemory_t *kve);
 
-/**
- * @brief Set new base station geometry data
- *
- * @param geometries Pointer to an array of geomtry data with PULSE_PROCESSOR_N_BASE_STATIONS entries.
- */
-void lighthousePositionSetGeometryData(const baseStationGeometry_t* geometries);
+bool kveStore(kveMemory_t *kve, char* key, const void* buffer, size_t length);
 
-void lighthousePositionEstimatePoseCrossingBeams(const pulseProcessor_t *state, pulseProcessorResult_t* angles, int baseStation);
-void lighthousePositionEstimatePoseSweeps(const pulseProcessor_t *state, pulseProcessorResult_t* angles, int baseStation);
+size_t kveFetch(kveMemory_t *kve, const char* key, void* buffer, size_t bufferLength);
+
+bool kveDelete(kveMemory_t *kve, char* key);
+
+void kveFormat(kveMemory_t *kve);
+
+bool kveCheck(kveMemory_t *kve);
