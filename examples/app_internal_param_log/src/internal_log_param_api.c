@@ -7,7 +7,7 @@
  *
  * Crazyflie control firmware
  *
- * Copyright (C) 2020 Bitcraze AB
+ * Copyright (C) 2019 Bitcraze AB
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,9 +22,8 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  *
- * api_app.c - App layer application that ilustrates how to use functions in the API.
- *             This app may not be possible to run, the intention is to show how to
- *             use functions.
+ * internal_log_param_api.c - App layer application of the internal log
+ *  and param api  
  */
 
 
@@ -39,21 +38,35 @@
 
 #include "debug.h"
 
-// Examples
-#include "app_ledseq.h"
-#include "app_high_level_commander.h"
-#include "app_lighthouse.h"
+#include "log.h"
+#include "param.h"
 
-#define DEBUG_MODULE "APPAPI"
+#define DEBUG_MODULE "INTERNLOGPARAM"
 
-void appMain() {
-  appRegisterLedSequence();
-  appEnableHighLevelCommander();
-  appInitLighthouse();
+void appMain()
+{
+  DEBUG_PRINT("This is the App layer example of the internal log param api...\n");
+  logVarId_t idYaw = logGetVarId("stateEstimate", "yaw");
+  float yaw = 0.0f;
+
+  paramVarId_t idEstimator = paramGetVarId("stabilizer", "estimator");
+  uint8_t estimator_type = 0;
 
   while(1) {
-    vTaskDelay(M2T(3000));
-    appRunLedSequence();
-    // appRunHighLevelCommanderFlySquare();
+    vTaskDelay(M2T(2000));
+
+    // Get the logging data
+    yaw = logGetFloat(idYaw);
+    DEBUG_PRINT("Yaw is now: %f deg\n", (double)yaw);
+
+    // Get parameter value
+    estimator_type = paramGetInt(idEstimator);
+    DEBUG_PRINT("Estimator type is now: %d deg\n", estimator_type);
+
+    // Set a parameter value 
+    //  Note, this will influence the flight quality if you change estimator
+    uint8_t new_value = 2;
+    paramSetInt(idEstimator, new_value);
+    
   }
 }

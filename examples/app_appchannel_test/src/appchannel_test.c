@@ -7,7 +7,7 @@
  *
  * Crazyflie control firmware
  *
- * Copyright (C) 2020 Bitcraze AB
+ * Copyright (C) 2019 Bitcraze AB
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -22,12 +22,43 @@
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
  *
- * app_ledseq.h - ledseq example
+ * appchanel_test.c: Demonstrate the appchanel functionality 
  */
 
-#pragma once
+#include "app.h"
+#include "app_channel.h"
 
-void appEnableHighLevelCommander();
-void appRunHighLevelCommanderFlySquare();
-void appDefineTrajectory();
-void appRunHighLevelCommanderFlyTrajectory();
+#include "debug.h"
+
+#define DEBUG_MODULE "HELLOWORLD"
+
+struct testPacketRX {
+  float x;
+  float y;
+  float z;
+} __attribute__((packed));
+
+struct testPacketTX {
+  float sum;
+} __attribute__((packed));
+
+void appMain()
+{
+  DEBUG_PRINT("Waiting for activation ...\n");
+
+  struct testPacketRX rxPacket;
+  struct testPacketTX txPacket;
+
+  while(1) {
+    if (appchannelReceivePacket(&rxPacket, sizeof(rxPacket), APPCHANNEL_WAIT_FOREVER)) {
+
+      DEBUG_PRINT("App channel received x: %f, y: %f, z: %f\n", (double)rxPacket.x, (double)rxPacket.y, (double)rxPacket.z);
+
+      txPacket.sum = rxPacket.x;
+      txPacket.sum += rxPacket.y;
+      txPacket.sum += rxPacket.z;
+
+      appchannelSendPacket(&txPacket, sizeof(txPacket));
+    }
+  }
+}

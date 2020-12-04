@@ -665,6 +665,20 @@ void crtpCommanderHighLevelTakeoffYaw(const float absoluteHeight_m, const float 
   handleCommand(COMMAND_TAKEOFF_2, (const uint8_t*)&data);
 }
 
+void crtpCommanderHighLevelTakeoffWithVelocity(const float height_m, const float velocity_m_s, bool relative)
+{
+  struct data_takeoff_with_velocity data =
+  {
+    .height = height_m,
+    .heightIsRelative = relative,
+    .velocity = velocity_m_s,
+    .useCurrentYaw = true,
+    .groupMask = ALL_GROUPS,
+  };
+
+  handleCommand(COMMAND_TAKEOFF_WITH_VELOCITY, (const uint8_t*)&data);
+}
+
 void crtpCommanderHighLevelLand(const float absoluteHeight_m, const float duration_s)
 {
   struct data_land_2 data =
@@ -676,6 +690,20 @@ void crtpCommanderHighLevelLand(const float absoluteHeight_m, const float durati
   };
 
   handleCommand(COMMAND_LAND_2, (const uint8_t*)&data);
+}
+
+void crtpCommanderHighLevelLandWithVelocity(const float height_m, const float velocity_m_s, bool relative)
+{
+  struct data_land_with_velocity data =
+  {
+    .height = height_m,
+    .heightIsRelative = relative,
+    .velocity = velocity_m_s,
+    .useCurrentYaw = true,
+    .groupMask = ALL_GROUPS,
+  };
+
+  handleCommand(COMMAND_LAND_WITH_VELOCITY, (const uint8_t*)&data);
 }
 
 void crtpCommanderHighLevelLandYaw(const float absoluteHeight_m, const float duration_s, const float yaw)
@@ -716,6 +744,14 @@ void crtpCommanderHighLevelGoTo(const float x, const float y, const float z, con
   };
 
   handleCommand(COMMAND_GO_TO, (const uint8_t*)&data);
+}
+
+bool crtpCommanderHighLevelIsTrajectoryDefined(uint8_t trajectoryId)
+{
+  return (
+    trajectoryId < NUM_TRAJECTORY_DEFINITIONS &&
+    trajectory_descriptions[trajectoryId].trajectoryLocation != TRAJECTORY_LOCATION_INVALID
+  );
 }
 
 void crtpCommanderHighLevelStartTrajectory(const uint8_t trajectoryId, const float timeScale, const bool relative, const bool reversed)

@@ -63,7 +63,13 @@
 // LOCO deck alternative IRQ and RESET pins(IO_2, IO_3) instead of default (RX1, TX1), leaving UART1 free for use
 #ifdef LOCODECK_USE_ALT_PINS
   #define GPIO_PIN_IRQ 	  DECK_GPIO_IO2
+
+  #ifndef LOCODECK_ALT_PIN_RESET
   #define GPIO_PIN_RESET 	DECK_GPIO_IO3
+  #else
+  #define GPIO_PIN_RESET 	LOCODECK_ALT_PIN_RESET
+  #endif
+
   #define EXTI_PortSource EXTI_PortSourceGPIOB
   #define EXTI_PinSource 	EXTI_PinSource5
   #define EXTI_LineN 		  EXTI_Line5
@@ -159,9 +165,6 @@ static const MemoryHandlerDef_t memDef = {
   .write = 0, // Write is not supported
 };
 static void buildAnchorMemList(const uint32_t memAddr, const uint8_t readLen, uint8_t* dest, const uint32_t pageBase_address, const uint8_t anchorCount, const uint8_t unsortedAnchorList[]);
-static bool locoDeckGetAnchorPosition(const uint8_t anchorId, point_t* position);
-static uint8_t locoDeckGetAnchorIdList(uint8_t unorderedAnchorList[], const int maxListSize);
-static uint8_t locoDeckGetActiveAnchorIdList(uint8_t unorderedAnchorList[], const int maxListSize);
 
 static void txCallback(dwDevice_t *dev)
 {
@@ -237,7 +240,7 @@ static void buildAnchorMemList(const uint32_t memAddr, const uint8_t readLen, ui
 
 // This function is called from the memory sub system that runs in a different
 // task, protect it from concurrent calls from this task
-static bool locoDeckGetAnchorPosition(const uint8_t anchorId, point_t* position)
+bool locoDeckGetAnchorPosition(const uint8_t anchorId, point_t* position)
 {
   if (!isInit) {
     return false;
@@ -251,7 +254,7 @@ static bool locoDeckGetAnchorPosition(const uint8_t anchorId, point_t* position)
 
 // This function is called from the memory sub system that runs in a different
 // task, protect it from concurrent calls from this task
-static uint8_t locoDeckGetAnchorIdList(uint8_t unorderedAnchorList[], const int maxListSize) {
+uint8_t locoDeckGetAnchorIdList(uint8_t unorderedAnchorList[], const int maxListSize) {
   if (!isInit) {
     return 0;
   }
@@ -264,7 +267,7 @@ static uint8_t locoDeckGetAnchorIdList(uint8_t unorderedAnchorList[], const int 
 
 // This function is called from the memory sub system that runs in a different
 // task, protect it from concurrent calls from this task
-static uint8_t locoDeckGetActiveAnchorIdList(uint8_t unorderedAnchorList[], const int maxListSize) {
+uint8_t locoDeckGetActiveAnchorIdList(uint8_t unorderedAnchorList[], const int maxListSize) {
   if (!isInit) {
     return 0;
   }

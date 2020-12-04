@@ -82,6 +82,17 @@ bool crtpCommanderHighLevelIsStopped();
 void crtpCommanderHighLevelTakeoff(const float absoluteHeight_m, const float duration_s);
 
 /**
+ * @brief vertical takeoff from current x-y position to given absolute or relative
+ * height with given velocity
+ *
+ * @param height_m         absolute or relative target height (m)
+ * @param velocity_m_s     takeoff velocity (m/s)
+ * @param relative         whether the height is relative to the current position
+ */
+void crtpCommanderHighLevelTakeoffWithVelocity(const float height_m, const float velocity_m_s, bool relative);
+
+
+/**
  * @brief vertical takeoff from current x-y position to given height
  *
  * @param absoluteHeight_m absolute target height (m)
@@ -97,6 +108,16 @@ void crtpCommanderHighLevelTakeoffYaw(const float absoluteHeight_m, const float 
  * @param duration_s       time it should take until target height is reached (s)
  */
 void crtpCommanderHighLevelLand(const float absoluteHeight_m, const float duration_s);
+
+/**
+ * @brief vertical land from current x-y position to given absolute or relative
+ * height with given velocity
+ *
+ * @param height_m         absolute or relative target height (m)
+ * @param velocity_m_s     landing velocity (m/s)
+ * @param relative         whether the height is relative to the current position
+ */
+void crtpCommanderHighLevelLandWithVelocity(const float height_m, const float velocity_m_s, bool relative);
 
 /**
  * @brief vertical land from current x-y position to given height
@@ -126,6 +147,13 @@ void crtpCommanderHighLevelStop();
  * @param relative   true if x, y, z is relative to the current position
  */
 void crtpCommanderHighLevelGoTo(const float x, const float y, const float z, const float yaw, const float duration_s, const bool relative);
+
+/**
+ * @brief Returns whether the trajectory with the given ID is defined
+ *
+ * @param trajectoryId The id of the trajectory
+ */
+bool crtpCommanderHighLevelIsTrajectoryDefined(uint8_t trajectoryId);
 
 /**
  * @brief starts executing a specified trajectory

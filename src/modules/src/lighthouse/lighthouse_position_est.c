@@ -29,6 +29,7 @@
 #include "estimator.h"
 #include "estimator_kalman.h"
 #include "math.h"
+#include "cf_math.h"
 
 #include "log.h"
 #include "param.h"
@@ -51,12 +52,13 @@ static statsCntRateLogger_t* bsEstRates[PULSE_PROCESSOR_N_BASE_STATIONS] = {&est
 // The light planes in LH2 are tilted +- 30 degrees
 static const float t30 = M_PI / 6;
 
-static void lighthousePositionGeometryDataUpdated();
+static void lighthousePositionGeometryDataUpdated(const int baseStation);
 static void preProcessGeometryData(mat3d bsRot, mat3d bsRotInverted, mat3d lh1Rotor2Rot, mat3d lh1Rotor2RotInverted);
 
-
-// Gometry memory handling for the memory module
-static uint32_t handleMemGetSize(void) { return sizeof(lighthouseCoreState.bsGeometry); }
+// Geometry memory handling for the memory module
+static const uint32_t calibStartAddr = 0x1000;
+static const uint32_t pageSize = 0x100;
+static uint32_t handleMemGetSize(void) { return calibStartAddr + sizeof(lighthouseCoreState.bsCalibration); }
 static bool handleMemRead(const uint32_t memAddr, const uint8_t readLen, uint8_t* buffer);
 static bool handleMemWrite(const uint32_t memAddr, const uint8_t writeLen, const uint8_t* buffer);
 static const MemoryHandlerDef_t memDef = {
@@ -67,17 +69,38 @@ static const MemoryHandlerDef_t memDef = {
 };
 
 void lighthousePositionEstInit() {
-  lighthousePositionGeometryDataUpdated();
+  for (int i = 0; i < PULSE_PROCESSOR_N_BASE_STATIONS; i++) {
+    lighthousePositionGeometryDataUpdated(i);
+  }
   memoryRegisterHandler(&memDef);
 }
 
 static bool handleMemRead(const uint32_t memAddr, const uint8_t readLen, uint8_t* buffer) {
   bool result = false;
 
-  if (memAddr + readLen <= sizeof(lighthouseCoreState.bsGeometry)) {
-    uint8_t* start = (uint8_t*)lighthouseCoreState.bsGeometry;
-    memcpy(buffer, start + memAddr, readLen);
-    result = true;
+  if (memAddr < calibStartAddr) {
+    uint32_t index = memAddr / pageSize;
+    uint32_t inPageAddr = memAddr % pageSize;
+    if (index < PULSE_PROCESSOR_N_BASE_STATIONS) {
+      if (inPageAddr + readLen <= sizeof(baseStationGeometry_t)) {
+        uint8_t* start = (uint8_t*)&lighthouseCoreState.bsGeometry[index];
+        memcpy(buffer, start + inPageAddr, readLen);
+
+        result = true;
+      }
+    }
+  } else {
+    uint32_t calibOffsetAddr = memAddr - calibStartAddr;
+    uint32_t index = calibOffsetAddr / pageSize;
+    uint32_t inPageAddr = calibOffsetAddr % pageSize;
+    if (index < PULSE_PROCESSOR_N_BASE_STATIONS) {
+      if (inPageAddr + readLen <= sizeof(lighthouseCalibration_t)) {
+        uint8_t* start = (uint8_t*)&lighthouseCoreState.bsCalibration[index];
+        memcpy(buffer, start + inPageAddr, readLen);
+
+        result = true;
+      }
+    }
   }
 
   return result;
@@ -86,38 +109,60 @@ static bool handleMemRead(const uint32_t memAddr, const uint8_t readLen, uint8_t
 static bool handleMemWrite(const uint32_t memAddr, const uint8_t writeLen, const uint8_t* buffer) {
   bool result = false;
 
-  if ((memAddr + writeLen) <= sizeof(lighthouseCoreState.bsGeometry)) {
-    uint8_t* start = (uint8_t*)lighthouseCoreState.bsGeometry;
-    memcpy(start + memAddr, buffer, writeLen);
+  if (memAddr < calibStartAddr) {
+    uint32_t index = memAddr / pageSize;
+    uint32_t inPageAddr = memAddr % pageSize;
+    if (index < PULSE_PROCESSOR_N_BASE_STATIONS) {
+      if (inPageAddr + writeLen <= sizeof(baseStationGeometry_t)) {
+        // Mark the geometry as invalid since this write probably only will update part of it
+        // If this is the last write in this block, the valid flag will be part of the data and set appropriately
+        // This is based on the assumption that the writes are done in oder with increasing addresses
+        lighthouseCoreState.bsGeometry[index].valid = false;
 
-    lighthousePositionGeometryDataUpdated();
+        uint8_t* start = (uint8_t*)&lighthouseCoreState.bsGeometry[index];
+        memcpy(start + inPageAddr, buffer, writeLen);
 
-    result = true;
+        lighthousePositionGeometryDataUpdated(index);
+
+        result = true;
+      }
+    }
+  } else {
+    uint32_t calibOffsetAddr = memAddr - calibStartAddr;
+    uint32_t index = calibOffsetAddr / pageSize;
+    uint32_t inPageAddr = calibOffsetAddr % pageSize;
+    if (index < PULSE_PROCESSOR_N_BASE_STATIONS) {
+      if (inPageAddr + writeLen <= sizeof(lighthouseCalibration_t)) {
+        uint8_t* start = (uint8_t*)&lighthouseCoreState.bsCalibration[index];
+        memcpy(start + inPageAddr, buffer, writeLen);
+
+        result = true;
+      }
+    }
   }
 
   return result;
 }
 
-static void lighthousePositionGeometryDataUpdated() {
-  for (int i = 0; i < PULSE_PROCESSOR_N_BASE_STATIONS; i++) {
-    baseStationGeometryCache_t* cache =  &lighthouseCoreState.bsGeoCache[i];
-    preProcessGeometryData(lighthouseCoreState.bsGeometry[i].mat, cache->baseStationInvertedRotationMatrixes, cache->lh1Rotor2RotationMatrixes, cache->lh1Rotor2InvertedRotationMatrixes);
+static void lighthousePositionGeometryDataUpdated(const int baseStation) {
+  if (lighthouseCoreState.bsGeometry[baseStation].valid) {
+    baseStationGeometryCache_t* cache = &lighthouseCoreState.bsGeoCache[baseStation];
+    preProcessGeometryData(lighthouseCoreState.bsGeometry[baseStation].mat, cache->baseStationInvertedRotationMatrixes, cache->lh1Rotor2RotationMatrixes, cache->lh1Rotor2InvertedRotationMatrixes);
   }
 }
 
-void lighthousePositionSetGeometryData(const baseStationGeometry_t* geometries) {
-  for (int i = 0; i < PULSE_PROCESSOR_N_BASE_STATIONS; i++) {
-    lighthouseCoreState.bsGeometry[i] = geometries[i];
+void lighthousePositionSetGeometryData(const uint8_t baseStation, const baseStationGeometry_t* geometry) {
+  if (baseStation < PULSE_PROCESSOR_N_BASE_STATIONS) {
+    lighthouseCoreState.bsGeometry[baseStation] = *geometry;
+    lighthousePositionGeometryDataUpdated(baseStation);
   }
-
-  lighthousePositionGeometryDataUpdated();
 }
 
 static void preProcessGeometryData(mat3d bsRot, mat3d bsRotInverted, mat3d lh1Rotor2Rot, mat3d lh1Rotor2RotInverted) {
   // For a rotation matrix inverse and transpose is equal. Use transpose instead
   arm_matrix_instance_f32 bsRot_ = {3, 3, (float32_t *)bsRot};
   arm_matrix_instance_f32 bsRotInverted_ = {3, 3, (float32_t *)bsRotInverted};
-  arm_mat_trans_f32(&bsRot_, &bsRotInverted_);
+  mat_trans(&bsRot_, &bsRotInverted_);
 
   // In a LH1 system, the axis of rotation of the second rotor is perpendicular to the first rotor
   mat3d secondRotorInvertedR = {
@@ -127,10 +172,10 @@ static void preProcessGeometryData(mat3d bsRot, mat3d bsRotInverted, mat3d lh1Ro
   };
   arm_matrix_instance_f32 secondRotorInvertedR_ = {3, 3, (float32_t *)secondRotorInvertedR};
   arm_matrix_instance_f32 lh1Rotor2Rot_ = {3, 3, (float32_t *)lh1Rotor2Rot};
-  arm_mat_mult_f32(&bsRot_, &secondRotorInvertedR_, &lh1Rotor2Rot_);
+  mat_mult(&bsRot_, &secondRotorInvertedR_, &lh1Rotor2Rot_);
 
   arm_matrix_instance_f32 lh1Rotor2RotInverted_ = {3, 3, (float32_t *)lh1Rotor2RotInverted};
-  arm_mat_trans_f32(&lh1Rotor2Rot_, &lh1Rotor2RotInverted_);
+  mat_trans(&lh1Rotor2Rot_, &lh1Rotor2RotInverted_);
 }
 
 
@@ -345,13 +390,17 @@ static void estimateYaw(const pulseProcessor_t *state, pulseProcessorResult_t* a
 }
 
 void lighthousePositionEstimatePoseCrossingBeams(const pulseProcessor_t *state, pulseProcessorResult_t* angles, int baseStation) {
-  estimatePositionCrossingBeams(state, angles, baseStation);
-  estimateYaw(state, angles, baseStation);
+  if (state->bsGeometry[0].valid && state->bsGeometry[1].valid) {
+    estimatePositionCrossingBeams(state, angles, baseStation);
+    estimateYaw(state, angles, baseStation);
+  }
 }
 
 void lighthousePositionEstimatePoseSweeps(const pulseProcessor_t *state, pulseProcessorResult_t* angles, int baseStation) {
-  estimatePositionSweeps(state, angles, baseStation);
-  estimateYaw(state, angles, baseStation);
+  if (state->bsGeometry[baseStation].valid) {
+    estimatePositionSweeps(state, angles, baseStation);
+    estimateYaw(state, angles, baseStation);
+  }
 }
 
 
