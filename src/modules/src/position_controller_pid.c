@@ -207,7 +207,7 @@ void velocityController(float* thrust, attitude_t *attitude, setpoint_t *setpoin
   float pitchRaw = runPid(state->velocity.y, &this.pidVY, setpoint->velocity.y, DT);
 
   float yawRad = state->attitude.yaw * (float)M_PI / 180;
-  attitude->pitch = -(rollRaw  * cosf(yawRad)) - (pitchRaw * sinf(yawRad));
+  attitude->pitch = +(rollRaw  * cosf(yawRad)) + (pitchRaw * sinf(yawRad));
   attitude->roll  = -(pitchRaw * cosf(yawRad)) + (rollRaw  * sinf(yawRad));
 
   attitude->roll  = constrain(attitude->roll,  -rpLimit, rpLimit);
