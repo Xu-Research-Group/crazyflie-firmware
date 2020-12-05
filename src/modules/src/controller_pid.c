@@ -30,6 +30,10 @@ static float r_roll;
 static float r_pitch;
 static float r_yaw;
 static float accelz;
+static float err_x;
+static float err_y;
+static float err_z;
+static bool flying = false;
 
 void controllerPidInit(void)
 {
@@ -80,18 +84,27 @@ void controllerPid(control_t *control, setpoint_t *setpoint,
     //VF - Run LQR and update [T_c, p, q, r]
     //                           [actuatorThrust, rateDesired.roll, rateDesired.pitch, rateDesired.yaw]
 
+    if (setpoint->position.z > 0){
+        flying = true;
+    }
+
     // Update setpoint x_c
     x_c.position.x = setpoint->position.x;
     x_c.position.y = setpoint->position.y;
     x_c.position.z = setpoint->position.z;
     x_c.attitude.yaw = capAngle(setpoint->attitude.yaw)*DEG2RAD;
 
+    // Compute error in position
+    err_x = state->position.x - x_c.position.x;
+    err_y = state->position.y - x_c.position.y;
+    err_z = state->position.z - x_c.position.z;
+
     // DU = -K*(x - x_des)
-    actuatorThrust = -(31.6228f*(state->position.z - x_c.position.z) + 12.7768f*(state->velocity.z - x_c.velocity.z)); // c (norm thrust)
+    actuatorThrust = -(31.6228f*(err_z) + 12.7768f*(state->velocity.z - x_c.velocity.z)); // c (norm thrust)
 
-    rateDesired.roll = -(-4.4721f*(state->position.y - x_c.position.y) + 7.6869f*(state->attitude.roll*DEG2RAD - x_c.attitude.roll) - 3.0014f*(state->velocity.y - x_c.velocity.y)); // p
+    rateDesired.roll = -(-4.4721f*(err_y) + 7.6869f*(state->attitude.roll*DEG2RAD - x_c.attitude.roll) - 3.0014f*(state->velocity.y - x_c.velocity.y)); // p
 
-    rateDesired.pitch = -(-4.4721f*(state->position.x - x_c.position.x) - 7.6869f*(-state->attitude.pitch*DEG2RAD - x_c.attitude.pitch) - 3.0014f*(state->velocity.x - x_c.velocity.x)); // q
+    rateDesired.pitch = -(-4.4721f*(err_x) - 7.6869f*(-state->attitude.pitch*DEG2RAD - x_c.attitude.pitch) - 3.0014f*(state->velocity.x - x_c.velocity.x)); // q
 
     rateDesired.yaw = (state->attitude.yaw*DEG2RAD - x_c.attitude.yaw); // r
 
@@ -108,6 +121,11 @@ void controllerPid(control_t *control, setpoint_t *setpoint,
     rateDesired.roll = rateDesired.roll*RAD2DEG;
     rateDesired.pitch = rateDesired.pitch*RAD2DEG;
     rateDesired.yaw = rateDesired.yaw*RAD2DEG;
+
+    // Set thrust to 0 if z_desired is 0 and we are close to target
+    if(!flying){
+        actuatorThrust = 0;
+    }
 
   }
 
