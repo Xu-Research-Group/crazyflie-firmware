@@ -71,6 +71,7 @@ enum packet_type {
   hoverType         = 5,
   fullStateType     = 6,
   positionType      = 7,
+  LQRStateType      = 8, // VF
 };
 
 /* ---===== 2 - Decoding functions =====--- */
@@ -367,6 +368,40 @@ static void positionDecoder(setpoint_t *setpoint, uint8_t type, const void *data
   setpoint->attitude.yaw = values->yaw;
 }
 
+struct LQRStatePacket_s {
+  int16_t x;         // position - mm
+  int16_t y;
+  int16_t z;
+  int16_t roll;      // Euler angle Z-Y-X
+  int16_t pitch;      // milliradians
+  int16_t yaw;
+  int16_t vx;        // velocity - mm / sec
+  int16_t vy;
+  int16_t vz;
+} __attribute__((packed));
+// Keeps the angles in radians when entered in setpoint
+static void LQRStateDecoder(setpoint_t *setpoint, uint8_t type, const void *data, size_t datalen)
+{
+  const struct LQRStatePacket_s *values = data;
+
+  ASSERT(datalen == sizeof(struct LQRStatePacket_s));
+
+  // Convert position and velocity to m and m/s
+  #define UNPACK(x) \
+  setpoint->position.x = values->x / 1000.0f; \
+  setpoint->velocity.x = (values->v ## x) / 1000.0f; \
+
+  UNPACK(x)
+  UNPACK(y)
+  UNPACK(z)
+  #undef UNPACK
+
+  setpoint->attitude.roll =  values->roll / 1000.0f;
+  setpoint->attitude.pitch =  values->pitch / 1000.0f;
+  setpoint->attitude.yaw =  values->yaw / 1000.0f;
+}
+
+
  /* ---===== 3 - packetDecoders array =====--- */
 const static packetDecoder_t packetDecoders[] = {
   [stopType]          = stopDecoder,
@@ -377,6 +412,7 @@ const static packetDecoder_t packetDecoders[] = {
   [hoverType]         = hoverDecoder,
   [fullStateType]     = fullStateDecoder,
   [positionType]      = positionDecoder,
+  [LQRStateType]      = LQRStateDecoder,
 };
 
 /* Decoder switch */
