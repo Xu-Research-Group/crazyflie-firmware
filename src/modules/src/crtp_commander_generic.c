@@ -368,13 +368,13 @@ static void positionDecoder(setpoint_t *setpoint, uint8_t type, const void *data
   setpoint->attitude.yaw = values->yaw;
 }
 
-struct LQRStatePacket_s {
+struct LQRStatePacket_s { // 24 bytes
   int16_t x;         // position - mm
   int16_t y;
   int16_t z;
-  int16_t roll;      // Euler angle Z-Y-X
-  int16_t pitch;      // milliradians
-  int16_t yaw;
+  float roll;      // Euler angle Z-Y-X
+  float pitch;      // rad
+  float yaw;
   int16_t vx;        // velocity - mm / sec
   int16_t vy;
   int16_t vz;
@@ -396,9 +396,9 @@ static void LQRStateDecoder(setpoint_t *setpoint, uint8_t type, const void *data
   UNPACK(z)
   #undef UNPACK
 
-  setpoint->attitude.roll =  values->roll / 1000.0f;
-  setpoint->attitude.pitch =  values->pitch / 1000.0f;
-  setpoint->attitude.yaw =  values->yaw / 1000.0f;
+  setpoint->attitude.roll =  values->roll;
+  setpoint->attitude.pitch =  values->pitch;
+  setpoint->attitude.yaw =  values->yaw;
 }
 
 
