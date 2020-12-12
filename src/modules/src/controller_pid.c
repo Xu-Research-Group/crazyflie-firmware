@@ -87,12 +87,19 @@ void controllerPid(control_t *control, setpoint_t *setpoint,
     if (setpoint->position.z > 0){
         flying = true;
     }
+    else
+        flying = false;
 
     // Update setpoint x_c
     x_c.position.x = setpoint->position.x;
     x_c.position.y = setpoint->position.y;
     x_c.position.z = setpoint->position.z;
-    x_c.attitude.yaw = capAngle(setpoint->attitude.yaw)*DEG2RAD;
+    x_c.attitude.roll = setpoint->attitude.roll;
+    x_c.attitude.pitch = setpoint->attitude.pitch;
+    x_c.attitude.yaw = capAngle(setpoint->attitude.yaw);
+    x_c.velocity.x = setpoint->velocity.x;
+    x_c.velocity.y = setpoint->velocity.y;
+    x_c.velocity.z = setpoint->velocity.z;
 
     // Compute error in position
     err_x = state->position.x - x_c.position.x;
