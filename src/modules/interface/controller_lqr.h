@@ -8,6 +8,7 @@
  * Crazyflie control firmware
  *
  * Copyright (C) 2011-2016 Bitcraze AB
+ * Xu Research Group - Victor Freire
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -21,29 +22,18 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- * controller.h - Controller interface
+ * controller_lqr.h - LQR Controller Interface
  */
-#ifndef __CONTROLLER_H__
-#define __CONTROLLER_H__
+#ifndef __CONTROLLER_LQR_H__
+#define __CONTROLLER_LQR_H__
 
 #include "stabilizer_types.h"
 
-typedef enum {
-  ControllerTypeAny,
-  ControllerTypePID,
-  ControllerTypeMellinger,
-  ControllerTypeINDI,
-  ControllerTypeLQR,
-  ControllerType_COUNT,
-} ControllerType;
-
-void controllerInit(ControllerType controller);
-bool controllerTest(void);
-void controller(control_t *control, setpoint_t *setpoint,
+void controllerLqrInit(void);
+bool controllerLqrTest(void);
+void controllerLqr(control_t *control, setpoint_t *setpoint,
                                          const sensorData_t *sensors,
                                          const state_t *state,
                                          const uint32_t tick);
-ControllerType getControllerType(void);
-const char* controllerGetName();
 
-#endif //__CONTROLLER_H__
+#endif //__CONTROLLER_LQR_H__

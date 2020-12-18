@@ -6,6 +6,9 @@ CFLAGS += -DCF_MASS=0.034f # in kg
 # Use kalman estimator if PID setpoints are POS ABS [x y z psi]
 ESTIMATOR=kalman
 
+# Use LQR controller. Comment this line to use default (PID)
+#CONTROLLER=LQR
+
 ## Force device type string
 # CFLAGS += -DDEVICE_TYPE_STRING_FORCE="CF20"
 
