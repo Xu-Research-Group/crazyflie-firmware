@@ -7,7 +7,7 @@ CFLAGS += -DCF_MASS=0.034f # in kg
 ESTIMATOR=kalman
 
 # Use LQR controller. Comment this line to use default (PID)
-#CONTROLLER=LQR
+CONTROLLER=LQR
 
 ## Force device type string
 # CFLAGS += -DDEVICE_TYPE_STRING_FORCE="CF20"
