@@ -368,18 +368,22 @@ static void positionDecoder(setpoint_t *setpoint, uint8_t type, const void *data
   setpoint->attitude.yaw = values->yaw;
 }
 
-struct LQRStatePacket_s { // 24 bytes
+struct LQRStatePacket_s { // 26 bytes
   int16_t x;         // position - mm
   int16_t y;
   int16_t z;
-  float roll;      // Euler angle Z-Y-X
-  float pitch;      // rad
-  float yaw;
+  int16_t roll;      // Euler angle Z-Y-X
+  int16_t pitch;     // millirad
+  int16_t yaw;
   int16_t vx;        // velocity - mm / sec
   int16_t vy;
   int16_t vz;
+  int16_t thrust;    // mm/s^2
+  int16_t p;         // millirad/s
+  int16_t q;
+  int16_t r;
 } __attribute__((packed));
-// Keeps the angles in radians when entered in setpoint
+// Converts unis and keeps the angles in radians when entered in setpoint
 static void LQRStateDecoder(setpoint_t *setpoint, uint8_t type, const void *data, size_t datalen)
 {
   const struct LQRStatePacket_s *values = data;
@@ -396,9 +400,18 @@ static void LQRStateDecoder(setpoint_t *setpoint, uint8_t type, const void *data
   UNPACK(z)
   #undef UNPACK
 
-  setpoint->attitude.roll =  values->roll;
-  setpoint->attitude.pitch =  values->pitch;
-  setpoint->attitude.yaw =  values->yaw;
+  // Unpack euler angles
+  setpoint->attitude.roll =  values->roll / 1000.0f;
+  setpoint->attitude.pitch =  values->pitch / 1000.0f;
+  setpoint->attitude.yaw =  values->yaw / 1000.0f;
+
+  // Unpack thrust
+  setpoint->thrust = values->thrust / 1000.0f;
+
+  // Unpack angular velocity
+  setpoint->attitudeRate.roll = values->p / 1000.0f;
+  setpoint->attitudeRate.pitch = values->q / 1000.0f;
+  setpoint->attitudeRate.yaw = values->r / 1000.0f;
 }
 
 
