@@ -106,9 +106,9 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
 
     // Saturate thrust and pqr
     actuatorThrust = fmaxf(fminf(actuatorThrust,18), 2);
-    //rateDesired.roll = fmaxf(fminf(rateDesired.roll,8),-8);
-    //rateDesired.pitch = fmaxf(fminf(rateDesired.pitch,8),-8);
-    //rateDesired.yaw = fmaxf(fminf(rateDesired.yaw,8),-8);
+    rateDesired.roll = fmaxf(fminf(rateDesired.roll,6),-6);
+    rateDesired.pitch = fmaxf(fminf(rateDesired.pitch,6),-6);
+    rateDesired.yaw = fmaxf(fminf(rateDesired.yaw,6),-6);
 
     // convert [c, p, q, r] to 0xFFFF and deg/s
     actuatorThrust = 19549.0f*sqrtf(actuatorThrust) - 15159.0f; // Convert to PWM units
