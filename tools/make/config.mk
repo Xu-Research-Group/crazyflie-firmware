@@ -3,11 +3,11 @@
 ## Weight of the Crazyflie, including decks. The default setting is a Crazyflie 2.X without decks.
 CFLAGS += -DCF_MASS=0.034f # in kg
 
-# Use kalman estimator if PID setpoints are POS ABS [x y z psi]
-ESTIMATOR=kalman
+# Force a default estimator with the line below
+#ESTIMATOR=kalman
 
-# Use LQR controller. Comment this line to use default (PID)
-CONTROLLER=LQR
+# Force a default controller with the line below.
+#CONTROLLER=LQR
 
 ## Force device type string
 # CFLAGS += -DDEVICE_TYPE_STRING_FORCE="CF20"
