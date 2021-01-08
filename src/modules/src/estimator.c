@@ -27,6 +27,7 @@ typedef struct {
   bool (*estimatorEnqueueFlow)(const flowMeasurement_t *flow);
   bool (*estimatorEnqueueYawError)(const yawErrorMeasurement_t *error);
   bool (*estimatorEnqueueSweepAngles)(const sweepAngleMeasurement_t *angles);
+  bool (*estimatorEnqueuePlaneDistance)(const planeDistanceMeasurement_t *plane);
 } EstimatorFcns;
 
 #define NOT_IMPLEMENTED ((void*)0)
@@ -47,6 +48,7 @@ static EstimatorFcns estimatorFunctions[] = {
         .estimatorEnqueueFlow = NOT_IMPLEMENTED,
         .estimatorEnqueueYawError = NOT_IMPLEMENTED,
         .estimatorEnqueueSweepAngles = NOT_IMPLEMENTED,
+        .estimatorEnqueuePlaneDistance = NOT_IMPLEMENTED,
     }, // Any estimator
     {
         .init = estimatorComplementaryInit,
@@ -63,6 +65,7 @@ static EstimatorFcns estimatorFunctions[] = {
         .estimatorEnqueueFlow = NOT_IMPLEMENTED,
         .estimatorEnqueueYawError = NOT_IMPLEMENTED,
         .estimatorEnqueueSweepAngles = NOT_IMPLEMENTED,
+        .estimatorEnqueuePlaneDistance = NOT_IMPLEMENTED,
     },
     {
         .init = estimatorKalmanInit,
@@ -79,6 +82,7 @@ static EstimatorFcns estimatorFunctions[] = {
         .estimatorEnqueueFlow = estimatorKalmanEnqueueFlow,
         .estimatorEnqueueYawError = estimatorKalmanEnqueueYawError,
         .estimatorEnqueueSweepAngles = estimatorKalmanEnqueueSweepAngles,
+        .estimatorEnqueuePlaneDistance = estimatorKalmanEnqueuePlaneDistance,
     },
 };
 
@@ -207,6 +211,14 @@ bool estimatorEnqueueFlow(const flowMeasurement_t *flow) {
 bool estimatorEnqueueSweepAngles(const sweepAngleMeasurement_t *angles) {
   if (estimatorFunctions[currentEstimator].estimatorEnqueueSweepAngles) {
     return estimatorFunctions[currentEstimator].estimatorEnqueueSweepAngles(angles);
+  }
+
+  return false;
+}
+
+bool estimatorEnqueuePlaneDistance(const planeDistanceMeasurement_t *plane) {
+  if (estimatorFunctions[currentEstimator].estimatorEnqueuePlaneDistance) {
+    return estimatorFunctions[currentEstimator].estimatorEnqueuePlaneDistance(plane);
   }
 
   return false;

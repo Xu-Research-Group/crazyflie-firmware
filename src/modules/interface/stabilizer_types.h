@@ -259,6 +259,16 @@ typedef struct {
   lighthouseCalibrationMeasurementModel_t calibrationMeasurementModel;
 } sweepAngleMeasurement_t;
 
+/** Plane Distance measurement */
+typedef struct {
+  uint8_t direction; // Relevant sensor direction
+  float z; // Distance measured
+  float z_dot; // Change in distance
+  float p[3]; // Vector perpendicular to the plane
+  float q[3]; // 3D Point that belongs to the plane
+  float stdDev;
+} planeDistanceMeasurement_t;
+
 // Frequencies to be used with the RATE_DO_EXECUTE_HZ macro. Do NOT use an arbitrary number.
 #define RATE_1000_HZ 1000
 #define RATE_500_HZ 500

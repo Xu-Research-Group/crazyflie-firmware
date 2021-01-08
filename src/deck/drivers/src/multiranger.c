@@ -35,6 +35,7 @@
 #include "vl53l1x.h"
 #include "range.h"
 #include "static_mem.h"
+#include "stabilizer_types.h"
 
 #include "i2cdev.h"
 
@@ -46,6 +47,7 @@
 static bool isInit = false;
 static bool isTested = false;
 static bool isPassed = false;
+static planeDistanceMeasurement_t plane; // TODO ADD #ifdef PLANE_DISTANCE
 
 #define MR_PIN_UP     PCA95X4_P0
 #define MR_PIN_FRONT  PCA95X4_P4
@@ -105,13 +107,16 @@ static void mrTask(void *param)
 
     while (1)
     {
-        vTaskDelayUntil(&lastWakeTime, M2T(100));
+        vTaskDelayUntil(&lastWakeTime, M2T(100)); // 10 Hz?
 
         rangeSet(rangeFront, mrGetMeasurementAndRestart(&devFront)/1000.0f);
         rangeSet(rangeBack, mrGetMeasurementAndRestart(&devBack)/1000.0f);
         rangeSet(rangeUp, mrGetMeasurementAndRestart(&devUp)/1000.0f);
         rangeSet(rangeLeft, mrGetMeasurementAndRestart(&devLeft)/1000.0f);
         rangeSet(rangeRight, mrGetMeasurementAndRestart(&devRight)/1000.0f);
+
+        // Send Plane distance if needed # TODO Parameterize with #ifdef PLANE_DISTANCE
+        rangeEnqueuePlaneDistanceInEstimator(&plane);
     }
 }
 
@@ -135,6 +140,17 @@ static void mrInit()
                        MR_PIN_LEFT |
                        MR_PIN_FRONT |
                        MR_PIN_BACK);
+
+    // Init the plane info here with provided data from Makefile
+    // TODO Add #ifdef PLANE_DISTANCE to this block
+    plane.p[0] = 0.0f;
+    plane.p[1] = -1.0f; // Wall in lab encoding
+    plane.p[2] = 0.0f;
+    plane.q[0] = 0.0f;
+    plane.q[1] = 2.42f; // Wall is 2.42 m from the Origin
+    plane.q[2] = 0.0f;
+    plane.direction = rangeLeft; // Relevant sensor is on the left of quad
+    plane.stdDev = 0.01; // TODO Get a real number for this
 
     isInit = true;
 
@@ -217,6 +233,7 @@ static const DeckDriver multiranger_deck = {
     .name = "bcMultiranger",
 
     .usedGpio = 0, // FIXME: set the used pins
+    .requiredEstimator = kalmanEstimator,
 
     .init = mrInit,
     .test = mrTest,

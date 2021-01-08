@@ -25,7 +25,8 @@
  *           and make them available as log
  */
 
-#pragma once
+#include "stabilizer_types.h"
+//#pragma once
 
 typedef enum {
     rangeFront=0,
@@ -56,9 +57,18 @@ float rangeGet(rangeDirection_t direction);
 /**
  * Enqueue a range measurement for distance to the ground in the current estimator.
  *
- * @param dstance Distance to the ground (m)
+ * @param distance Distance to the ground (m)
  * @param stdDev The standard deviation of the range sample
  * @param timeStamp The time when the range was sampled (in sys ticks)
- * @return true if the sample was successfuly enqueued
+ * @return true if the sample was successfully enqueued
  */
 bool rangeEnqueueDownRangeInEstimator(float distance, float stdDev, uint32_t timeStamp);
+
+/**
+ * Enqueue a plane distance measurement in the current estimator
+ *
+ * @param *plane Pointer to planeDistanceMeasurement_t initialized with the relevant plane information.
+ * @return true if the sample was successfully enqueued
+ */
+bool rangeEnqueuePlaneDistanceInEstimator(planeDistanceMeasurement_t *plane);
+// FIXME Handle pragma once call?

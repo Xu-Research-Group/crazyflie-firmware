@@ -131,6 +131,9 @@ void kalmanCoreUpdateWithYawError(kalmanCoreData_t *this, yawErrorMeasurement_t 
 // Measurement of sweep angles from a Lighthouse base station
 void kalmanCoreUpdateWithSweepAngles(kalmanCoreData_t *this, sweepAngleMeasurement_t *angles, const uint32_t tick);
 
+// Measurement of distance to a known plane from the multiranger deck
+void kalmanCoreUpdateWithPlaneDistance(kalmanCoreData_t *this, planeDistanceMeasurement_t *plane, const Axis3f *gyro);
+
 /**
  * Primary Kalman filter functions
  *

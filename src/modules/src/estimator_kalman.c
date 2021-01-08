@@ -166,6 +166,14 @@ static inline bool stateEstimatorHasSweepAnglesPacket(sweepAngleMeasurement_t *a
   return (pdTRUE == xQueueReceive(sweepAnglesDataQueue, angles, 0));
 }
 
+static xQueueHandle planeDistanceDataQueue;
+STATIC_MEM_QUEUE_ALLOC(planeDistanceDataQueue, 10, sizeof(planeDistanceMeasurement_t));
+
+static inline bool stateEstimatorHasPlaneDistancePacket(planeDistanceMeasurement_t *plane)
+{
+  return (pdTRUE == xQueueReceive(planeDistanceDataQueue, plane, 0));
+}
+
 // Semaphore to signal that we got data from the stabilzer loop to process
 static SemaphoreHandle_t runTaskSemaphore;
 
@@ -274,6 +282,7 @@ void estimatorKalmanTaskInit() {
   heightDataQueue = STATIC_MEM_QUEUE_CREATE(heightDataQueue);
   yawErrorDataQueue = STATIC_MEM_QUEUE_CREATE(yawErrorDataQueue);
   sweepAnglesDataQueue = STATIC_MEM_QUEUE_CREATE(sweepAnglesDataQueue);
+  planeDistanceDataQueue = STATIC_MEM_QUEUE_CREATE(planeDistanceDataQueue);
 
   vSemaphoreCreateBinary(runTaskSemaphore);
 
@@ -573,6 +582,13 @@ static bool updateQueuedMeasurments(const Axis3f *gyro, const uint32_t tick) {
     doneUpdate = true;
   }
 
+  planeDistanceMeasurement_t plane;
+  while (stateEstimatorHasPlaneDistancePacket(&plane))
+  {
+    kalmanCoreUpdateWithPlaneDistance(&coreData, &plane, gyro);
+    doneUpdate = true;
+  }
+
   return doneUpdate;
 }
 
@@ -584,6 +600,7 @@ void estimatorKalmanInit(void) {
   xQueueReset(tdoaDataQueue);
   xQueueReset(flowDataQueue);
   xQueueReset(tofDataQueue);
+  xQueueReset(planeDistanceDataQueue);
 
   xSemaphoreTake(dataMutex, portMAX_DELAY);
   accAccumulator = (Axis3f){.axis={0}};
@@ -680,6 +697,12 @@ bool estimatorKalmanEnqueueSweepAngles(const sweepAngleMeasurement_t *angles)
 {
   ASSERT(isInit);
   return appendMeasurement(sweepAnglesDataQueue, (void *)angles);
+}
+
+bool estimatorKalmanEnqueuePlaneDistance(const planeDistanceMeasurement_t *plane)
+{
+  ASSERT(isInit);
+  return appendMeasurement(planeDistanceDataQueue, (void *)plane);
 }
 
 bool estimatorKalmanTest(void)

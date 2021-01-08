@@ -57,6 +57,16 @@ bool rangeEnqueueDownRangeInEstimator(float distance, float stdDev, uint32_t tim
   return estimatorEnqueueTOF(&tofData);
 }
 
+bool rangeEnqueuePlaneDistanceInEstimator(planeDistanceMeasurement_t *plane) {
+  plane->z_dot = ((float)ranges[plane->direction]/1000.0f - plane->z)/0.1f; // The function is called every 100 ticks
+  plane->z = (float)ranges[plane->direction]/1000.0f;
+
+  // TODO Check integrity of measurement
+  // return false if needed?
+
+  return estimatorEnqueuePlaneDistance(plane);
+}
+
 LOG_GROUP_START(range)
 LOG_ADD(LOG_UINT16, front, &ranges[rangeFront])
 LOG_ADD(LOG_UINT16, back, &ranges[rangeBack])
