@@ -96,7 +96,7 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
 
     rateDesired.pitch = -(4.4721f*(err_x) + 7.6869f*(-state->attitude.pitch*DEG2RAD - x_c.attitude.pitch) + 3.0014f*(state->velocity.x - x_c.velocity.x)); // q
 
-    rateDesired.yaw = (state->attitude.yaw*DEG2RAD - x_c.attitude.yaw); // r
+    rateDesired.yaw = -(state->attitude.yaw*DEG2RAD - x_c.attitude.yaw); // r
 
     // Add u_0 | u = DU + u_0
     actuatorThrust += setpoint->thrust;
