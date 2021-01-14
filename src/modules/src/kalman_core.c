@@ -654,7 +654,7 @@ void kalmanCoreUpdateWithPlaneDistance(kalmanCoreData_t *this, planeDistanceMeas
 
   // Predict the measurement
   float predicted_z = 1.0f/pyb*(plane->s-this->S[KC_STATE_Y]/pyw); // z = 1/(p*y_B)*(s-y/(p*y_W))
-  h[KC_STATE_Y] = -(1.0f/pyb)*(1.0f/pyw) // dh/dy
+  h[KC_STATE_Y] = -(1.0f/pyb)*(1.0f/pyw); // dh/dy
   // TODO DELETE THIS BLOCK
   //float predicted_z_dot_u = (this->S[KC_STATE_PX]/px - qrp/py*pwxy)/py; // z_dot = f(u)
   //float predicted_z_dot_v = (this->S[KC_STATE_PY] - qrp*pwxy)/(py*py);  // z_dot = f(v)
