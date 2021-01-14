@@ -629,40 +629,38 @@ void kalmanCoreUpdateWithSweepAngles(kalmanCoreData_t *this, sweepAngleMeasureme
   }
 }
 
-// Update the body velocities KC_STATE_PX and KC_STATE_PY
+// Update the body position
 // with measurement from multiranger to known static plane
 void kalmanCoreUpdateWithPlaneDistance(kalmanCoreData_t *this, planeDistanceMeasurement_t *plane, const Axis3f *gyro){
-  float hu[KC_STATE_DIM] = {0};
-  arm_matrix_instance_f32 Hu = {1, KC_STATE_DIM, hu};
-  float hv[KC_STATE_DIM] = {0};
-  arm_matrix_instance_f32 Hv = {1, KC_STATE_DIM, hv};
+  float h[KC_STATE_DIM] = {0};
+  arm_matrix_instance_f32 H = {1, KC_STATE_DIM, h};
 
   // Y-Axis of body frame
   // R[0][1] = y_B[0]
   // R[1][1] = y_B[1]
   // R[2][1] = y_B[2]
+
   // Intermediate quantities
-  float py = plane->p[0]*this->R[0][1] + plane->p[1]*this->R[1][1] + plane->p[2]*this->R[2][1]; // dot(p,y_B)
-  float px = plane->p[0]*this->R[0][0] + plane->p[1]*this->R[1][0] + plane->p[2]*this->R[2][0]; // dot(p,x_B)
-  float qrp = plane->p[0]*(plane->q[0]-this->S[KC_STATE_X]) + plane->p[1]*(plane->q[1]-this->S[KC_STATE_Y]) + plane->p[2]*(plane->q[2]-this->S[KC_STATE_Z]); // dot((q-r),p)
-  float wxy[3] = {0}; // cross(w,y)
-  wxy[0] = gyro->y*this->R[2][1] - gyro->z*this->R[1][1];
-  wxy[1] = gyro->z*this->R[0][1] - gyro->x*this->R[2][1];
-  wxy[2] = gyro->x*this->R[1][1] - gyro->y*this->R[0][1];
-  float pwxy = plane->p[0]*wxy[0] + plane->p[1]*wxy[1] + plane->p[2]*wxy[2]; // dot(p,cross(w,y))
+  float pyb = plane->p[0]*this->R[0][1] + plane->p[1]*this->R[1][1] + plane->p[2]*this->R[2][1]; // dot(p,y_B)
+  float pyw = plane->p[1]; // dot(p,y_W)
+  // TODO DELETE THIS BLOCK
+  //float px = plane->p[0]*this->R[0][0] + plane->p[1]*this->R[1][0] + plane->p[2]*this->R[2][0]; // dot(p,x_B)
+  //float qrp = plane->p[0]*(plane->q[0]-this->S[KC_STATE_X]) + plane->p[1]*(plane->q[1]-this->S[KC_STATE_Y]) + plane->p[2]*(plane->q[2]-this->S[KC_STATE_Z]); // dot((q-r),p)
+  //float wxy[3] = {0}; // cross(w,y)
+  //wxy[0] = gyro->y*this->R[2][1] - gyro->z*this->R[1][1];
+  //wxy[1] = gyro->z*this->R[0][1] - gyro->x*this->R[2][1];
+  //wxy[2] = gyro->x*this->R[1][1] - gyro->y*this->R[0][1];
+  //float pwxy = plane->p[0]*wxy[0] + plane->p[1]*wxy[1] + plane->p[2]*wxy[2]; // dot(p,cross(w,y))
 
   // Predict the measurement
-  float predicted_z_dot_u = (this->S[KC_STATE_PX]/px - qrp/py*pwxy)/py; // z_dot = f(u)
-  float predicted_z_dot_v = (this->S[KC_STATE_PY] - qrp*pwxy)/(py*py);  // z_dot = f(v)
+  float predicted_z = 1.0f/pyb*(plane->s-this->S[KC_STATE_Y]/pyw); // z = 1/(p*y_B)*(s-y/(p*y_W))
+  h[KC_STATE_Y] = -(1.0f/pyb)*(1.0f/pyw) // dh/dy
+  // TODO DELETE THIS BLOCK
+  //float predicted_z_dot_u = (this->S[KC_STATE_PX]/px - qrp/py*pwxy)/py; // z_dot = f(u)
+  //float predicted_z_dot_v = (this->S[KC_STATE_PY] - qrp*pwxy)/(py*py);  // z_dot = f(v)
 
-  // Scalar update for u
-  hu[KC_STATE_PX] = 1/(py*px); //dz_dot/du
-  scalarUpdate(this, &Hu, plane->z_dot-predicted_z_dot_u, plane->stdDev);
-
-  // Scalar update for v
-  hv[KC_STATE_PX] = 1/(py*py); //dz_dot/dv
-  scalarUpdate(this, &Hv, plane->z_dot-predicted_z_dot_v, plane->stdDev);
-
+  // Scalar update for y
+  scalarUpdate(this, &H, plane->z-predicted_z, plane->stdDev);
 }
 
 void kalmanCorePredict(kalmanCoreData_t* this, float cmdThrust, Axis3f *acc, Axis3f *gyro, float dt, bool quadIsFlying)

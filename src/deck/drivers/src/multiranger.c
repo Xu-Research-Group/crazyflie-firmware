@@ -144,11 +144,9 @@ static void mrInit()
     // Init the plane info here with provided data from Makefile
     // TODO Add #ifdef PLANE_DISTANCE to this block
     plane.p[0] = 0.0f;
-    plane.p[1] = -1.0f; // Wall in lab encoding
+    plane.p[1] = 1.0f; // Wall in lab encoding
     plane.p[2] = 0.0f;
-    plane.q[0] = 0.0f;
-    plane.q[1] = 2.42f; // Wall is 2.42 m from the Origin
-    plane.q[2] = 0.0f;
+    plane.s = 2.42f; // Wall in lab distance to origin
     plane.direction = rangeLeft; // Relevant sensor is on the left of quad
     plane.stdDev = 0.01; // TODO Get a real number for this
 

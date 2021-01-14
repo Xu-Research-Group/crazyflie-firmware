@@ -263,9 +263,8 @@ typedef struct {
 typedef struct {
   uint8_t direction; // Relevant sensor direction
   float z; // Distance measured
-  float z_dot; // Change in distance
-  float p[3]; // Vector perpendicular to the plane
-  float q[3]; // 3D Point that belongs to the plane
+  float p[3]; // Vector perpendicular to the plane, away from origin
+  float s; // Perpendicular distance from plane to world origin
   float stdDev;
 } planeDistanceMeasurement_t;
 
