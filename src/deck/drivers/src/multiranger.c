@@ -148,7 +148,7 @@ static void mrInit()
     plane.p[2] = 0.0f;
     plane.s = 2.42f; // Wall in lab distance to origin
     plane.direction = rangeLeft; // Relevant sensor is on the left of quad
-    plane.stdDev = 0.01; // TODO Get a real number for this
+    plane.stdDev = 0.005; // 5 mm stdDev according to datasheet
 
     isInit = true;
 
