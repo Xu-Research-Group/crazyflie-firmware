@@ -122,7 +122,7 @@ void attitudeControllerCorrectAttitudePID(
 
   // Update PID for pitch axis
   pidSetDesired(&pidPitch, eulerPitchDesired);
-  *pitchRateDesired = -pidUpdate(&pidPitch, eulerPitchActual, true); // Negative q for positive theta NED
+  *pitchRateDesired = pidUpdate(&pidPitch, eulerPitchActual, true);
 
   // Update PID for yaw axis
   float yawError;
@@ -132,7 +132,7 @@ void attitudeControllerCorrectAttitudePID(
   else if (yawError < -180.0f)
     yawError += 360.0f;
   pidSetError(&pidYaw, yawError);
-  *yawRateDesired = -pidUpdate(&pidYaw, eulerYawActual, false); // Negative r for positive psi NED
+  *yawRateDesired = pidUpdate(&pidYaw, eulerYawActual, false);
 }
 
 void attitudeControllerResetRollAttitudePID(void)

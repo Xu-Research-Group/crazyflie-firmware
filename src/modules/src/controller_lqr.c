@@ -94,9 +94,9 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
 
     rateDesired.roll = -(-4.4721f*(err_y) + 7.6869f*(state->attitude.roll*DEG2RAD - x_c.attitude.roll) - 3.0014f*(state->velocity.y - x_c.velocity.y)); // p
 
-    rateDesired.pitch = -(-4.4721f*(err_x) - 7.6869f*(-state->attitude.pitch*DEG2RAD - x_c.attitude.pitch) - 3.0014f*(state->velocity.x - x_c.velocity.x)); // q
+    rateDesired.pitch = -(4.4721f*(err_x) + 7.6869f*(-state->attitude.pitch*DEG2RAD - x_c.attitude.pitch) + 3.0014f*(state->velocity.x - x_c.velocity.x)); // q
 
-    rateDesired.yaw = (state->attitude.yaw*DEG2RAD - x_c.attitude.yaw); // r
+    rateDesired.yaw = -(state->attitude.yaw*DEG2RAD - x_c.attitude.yaw); // r
 
     // Add u_0 | u = DU + u_0
     actuatorThrust += setpoint->thrust;
@@ -127,7 +127,7 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
 
   if (RATE_DO_EXECUTE(ATTITUDE_RATE, tick)) {
     // TODO: Investigate possibility to subtract gyro drift.
-    attitudeControllerCorrectRatePID(sensors->gyro.x, -sensors->gyro.y, -sensors->gyro.z,
+    attitudeControllerCorrectRatePID(sensors->gyro.x, sensors->gyro.y, sensors->gyro.z,
                              rateDesired.roll, rateDesired.pitch, rateDesired.yaw);
 
     attitudeControllerGetActuatorOutput(&control->roll,
