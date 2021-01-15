@@ -650,7 +650,7 @@ void kalmanCoreUpdateWithPlaneDistance(kalmanCoreData_t *this, planeDistanceMeas
     passed = false;
   }
   // Do not trust measurements when close to the ground
-  if (this->S[KC_STATE_Z] < 0.1f){
+  if (fabsf(this->S[KC_STATE_Z]) < 0.1f){
     passed = false;
   }
 
