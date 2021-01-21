@@ -147,8 +147,9 @@ static void mrInit()
     plane.p[1] = 1.0f; // Wall in lab encoding
     plane.p[2] = 0.0f;
     plane.s = 2.42f; // Wall in lab distance to origin
-    plane.direction = rangeLeft; // Relevant sensor is on the left of quad
     plane.stdDev = 0.005; // 5 mm stdDev according to datasheet
+    // Init directions front, right, back, left
+    plane.directions = {rangeFront, rangeRight, rangeBack, rangeLeft};
 
     isInit = true;
 

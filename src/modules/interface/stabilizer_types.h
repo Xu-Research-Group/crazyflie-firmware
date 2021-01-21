@@ -265,6 +265,7 @@ typedef struct {
   float p[3]; // Vector perpendicular to the plane, away from origin
   float s; // Perpendicular distance from plane to world origin
   float stdDev;
+  uint8_t directions[4]; // Directions of each measurement
 } planeDistanceMeasurement_t;
 
 // Frequencies to be used with the RATE_DO_EXECUTE_HZ macro. Do NOT use an arbitrary number.

@@ -58,15 +58,16 @@ bool rangeEnqueueDownRangeInEstimator(float distance, float stdDev, uint32_t tim
 }
 
 bool rangeEnqueuePlaneDistanceInEstimator(planeDistanceMeasurement_t *plane) {
-  plane->z = (float)ranges[plane->direction]/1000.0f; // Convert to m
-
+  float z = 0;
+  // Populate z measurements
   // Datasheet says 4m is limit for range
-  if (plane->z > 3.75f){
-    return false; // Don't trust measurements larger than 3.75 m
-  } else if(plane->z < 0.1f){
-    return false; // Don't trust measurements smaller than 0.1 m
+  for (i = 0; i<4; i++){
+    z = (float)ranges[plane->directions[i]]/1000.0f;
+    if(z< 3.75f && z> 0.1f)
+      plane->z[i] = z;
+    else
+      plane->z[i] = 0;
   }
-
   return estimatorEnqueuePlaneDistance(plane);
 }
 

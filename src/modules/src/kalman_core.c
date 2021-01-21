@@ -629,24 +629,30 @@ void kalmanCoreUpdateWithSweepAngles(kalmanCoreData_t *this, sweepAngleMeasureme
   }
 }
 
-// Update the body position
+// Update the body position x and y
 // with measurement from multiranger to known static plane
 void kalmanCoreUpdateWithPlaneDistance(kalmanCoreData_t *this, planeDistanceMeasurement_t *plane, const Axis3f *gyro){
+  // Find the most relevant sensor
+  float pxb = plane->p[0]*this->R[0][0] + plane->p[1]*this->R[1][0] + plane->p[2]*this->R[2][0]; // dot(p,x_B)
+  float pyb = plane->p[0]*this->R[0][1] + plane->p[1]*this->R[1][1] + plane->p[2]*this->R[2][1]; // dot(p,y_B)
+  float f[4] = {pxb, -pyb, -pxb, pyb}; // feasibility vector
+  // Find largest value in f
+  float best_f = f[0];
+  float best_z = plane->z[0];
+  for (i=1;i<4;i++){
+    if(f[i] > best_px){
+      best_f = f[i];
+      best_z = z[i];
+    }
+  }
+
+  // Predict the measurement
   bool passed = true; // Perform update only if measurement checks pass
   float h[KC_STATE_DIM] = {0};
   arm_matrix_instance_f32 H = {1, KC_STATE_DIM, h};
 
-  // Y-Axis of body frame
-  // R[0][1] = y_B[0]
-  // R[1][1] = y_B[1]
-  // R[2][1] = y_B[2]
-
-  // Intermediate quantities
-  float pyb = plane->p[0]*this->R[0][1] + plane->p[1]*this->R[1][1] + plane->p[2]*this->R[2][1]; // dot(p,y_B)
-  float pyw = plane->p[1]; // dot(p,y_W)
-
   // Check the position is observable
-  if (fabsf(pyb) < 0.707f || fabsf(pyw) < 0.707f){
+  if (best_f < 0.707f || best_f < 0.707f){
     passed = false;
   }
   // Do not trust measurements when close to the ground
@@ -656,8 +662,10 @@ void kalmanCoreUpdateWithPlaneDistance(kalmanCoreData_t *this, planeDistanceMeas
 
   if(passed){
     // Predict the measurement
-    float predicted_z = 1.0f/pyb*(plane->s-this->S[KC_STATE_Y]/pyw); // z = 1/(p*y_B)*(s-y/(p*y_W))
-    h[KC_STATE_Y] = -(1.0f/pyb)*(1.0f/pyw); // dh/dy
+    float rp = this->S[KC_STATE_X]*plane->p[0] + this->S[KC_STATE_Y]*plane->p[1] + this->S[KC_STATE_Z]*plane->p[2];
+    float predicted_z = (plane->s-rp)/best_f; // z = (s-dot(r,p))/dot(p,u_z)
+    h[KC_STATE_X] = -plane->p[0]/best_f; // dh/dx
+    h[KC_STATE_Y] = -plane->p[1]/best_f; // dh/dy
     // Scalar update for y
     scalarUpdate(this, &H, plane->z-predicted_z, plane->stdDev);
   }
