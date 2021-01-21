@@ -61,7 +61,7 @@ bool rangeEnqueuePlaneDistanceInEstimator(planeDistanceMeasurement_t *plane) {
   float z = 0;
   // Populate z measurements
   // Datasheet says 4m is limit for range
-  for (i = 0; i<4; i++){
+  for (int i = 0; i<4; i++){
     z = (float)ranges[plane->directions[i]]/1000.0f;
     if(z< 3.75f && z> 0.1f)
       plane->z[i] = z;

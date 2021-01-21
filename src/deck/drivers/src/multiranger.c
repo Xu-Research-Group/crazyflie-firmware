@@ -149,7 +149,10 @@ static void mrInit()
     plane.s = 2.42f; // Wall in lab distance to origin
     plane.stdDev = 0.005; // 5 mm stdDev according to datasheet
     // Init directions front, right, back, left
-    plane.directions = {rangeFront, rangeRight, rangeBack, rangeLeft};
+    plane.directions[0] = rangeFront;
+    plane.directions[1] = rangeRight;
+    plane.directions[2] = rangeBack;
+    plane.directions[3] = rangeLeft;
 
     isInit = true;
 

@@ -639,10 +639,10 @@ void kalmanCoreUpdateWithPlaneDistance(kalmanCoreData_t *this, planeDistanceMeas
   // Find largest value in f
   float best_f = f[0];
   float best_z = plane->z[0];
-  for (i=1;i<4;i++){
-    if(f[i] > best_px){
+  for(int i=1;i<4;i++){
+    if(f[i] > best_f){
       best_f = f[i];
-      best_z = z[i];
+      best_z = plane->z[i];
     }
   }
 
@@ -667,7 +667,7 @@ void kalmanCoreUpdateWithPlaneDistance(kalmanCoreData_t *this, planeDistanceMeas
     h[KC_STATE_X] = -plane->p[0]/best_f; // dh/dx
     h[KC_STATE_Y] = -plane->p[1]/best_f; // dh/dy
     // Scalar update for y
-    scalarUpdate(this, &H, plane->z-predicted_z, plane->stdDev);
+    scalarUpdate(this, &H, best_z-predicted_z, plane->stdDev);
   }
 }
 
