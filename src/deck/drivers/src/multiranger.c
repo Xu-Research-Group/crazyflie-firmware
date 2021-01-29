@@ -47,7 +47,9 @@
 static bool isInit = false;
 static bool isTested = false;
 static bool isPassed = false;
-static planeDistanceMeasurement_t plane; // TODO ADD #ifdef PLANE_DISTANCE
+#ifdef PLANE_DISTANCE
+  static planeDistanceMeasurement_t plane;
+#endif
 
 #define MR_PIN_UP     PCA95X4_P0
 #define MR_PIN_FRONT  PCA95X4_P4
@@ -115,8 +117,10 @@ static void mrTask(void *param)
         rangeSet(rangeLeft, mrGetMeasurementAndRestart(&devLeft)/1000.0f);
         rangeSet(rangeRight, mrGetMeasurementAndRestart(&devRight)/1000.0f);
 
-        // Send Plane distance if needed # TODO Parameterize with #ifdef PLANE_DISTANCE
-        rangeEnqueuePlaneDistanceInEstimator(&plane);
+        #ifdef PLANE_DISTANCE
+          // Send Plane distance if needed
+          rangeEnqueuePlaneDistanceInEstimator(&plane);
+        #endif
     }
 }
 
@@ -141,14 +145,15 @@ static void mrInit()
                        MR_PIN_FRONT |
                        MR_PIN_BACK);
 
-    // Init the plane info here with provided data from Makefile
-    // TODO Add #ifdef PLANE_DISTANCE to this block
-    plane.p[0] = 0.0f;
-    plane.p[1] = 1.0f; // Wall in lab encoding
-    plane.p[2] = 0.0f;
-    plane.s = 2.42f; // Wall in lab distance to origin
-    plane.direction = rangeLeft; // Relevant sensor is on the left of quad
-    plane.stdDev = 0.005; // 5 mm stdDev according to datasheet
+    #ifdef PLANE_DISTANCE
+      // Init the plane info here with provided data from Makefile
+      plane.p[0] = 0.0f;
+      plane.p[1] = 1.0f; // Wall in lab encoding
+      plane.p[2] = 0.0f;
+      plane.s = 2.42f; // Wall in lab distance to origin
+      plane.direction = rangeLeft; // Relevant sensor is on the left of quad
+      plane.stdDev = 0.005; // 5 mm stdDev according to datasheet
+    #endif
 
     isInit = true;
 

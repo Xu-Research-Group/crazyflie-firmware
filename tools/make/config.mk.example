@@ -116,3 +116,6 @@
 # CFLAGS += -DSTART_DISARMED
 # IDLE motor drive when armed, 0 = 0%, 65535 = 100% (the motors runs as long as the Crazyflie is armed)
 # CFLAGS += -DDEFAULT_IDLE_THRUST=5000
+
+## Use Plane Distance measurements on Multiranger
+#CFLAGS += -PLANE_DISTANCE
