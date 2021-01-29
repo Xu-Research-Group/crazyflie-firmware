@@ -89,14 +89,17 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     err_y = state->position.y - x_c.position.y;
     err_z = state->position.z - x_c.position.z;
 
-    // DU = -K*(x - x_des)
+    // DU = -K*(x - x_des) - psi_e = 0
     actuatorThrust = -(31.6228f*(err_z) + 12.7768f*(state->velocity.z - x_c.velocity.z)); // c (norm thrust)
-
     rateDesired.roll = -(-4.4721f*(err_y) + 7.6869f*(state->attitude.roll*DEG2RAD - x_c.attitude.roll) - 3.0014f*(state->velocity.y - x_c.velocity.y)); // p
-
     rateDesired.pitch = -(4.4721f*(err_x) + 7.6869f*(-state->attitude.pitch*DEG2RAD - x_c.attitude.pitch) + 3.0014f*(state->velocity.x - x_c.velocity.x)); // q
-
     rateDesired.yaw = -(state->attitude.yaw*DEG2RAD - x_c.attitude.yaw); // r
+
+    // DU = -K*(x-x_des) - psi_e = -45
+    //actuatorThrust = -(31.6228f*(err_z) + 12.7768f*(state->velocity.z - x_c.velocity.z)); // c (norm thrust)
+    //rateDesired.roll = -(-2.7623f*(err_x) -3.5171f*(err_y) + 8.4223f*(state->attitude.roll*DEG2RAD - x_c.attitude.roll) -1.7513f*(state->velocity.x - x_c.velocity.x) -2.2298f*(state->velocity.y - x_c.velocity.y)); // p
+    //rateDesired.pitch = -(3.5171f*(err_x) -2.7623f*(err_y) + 8.4223f*(-state->attitude.pitch*DEG2RAD - x_c.attitude.pitch) + 2.2298f*(state->velocity.x - x_c.velocity.x) -1.7513f*(state->velocity.y - x_c.velocity.y)); // q
+    //rateDesired.yaw = -(state->attitude.yaw*DEG2RAD - x_c.attitude.yaw); // r
 
     // Add u_0 | u = DU + u_0
     actuatorThrust += setpoint->thrust;
