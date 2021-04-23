@@ -416,13 +416,6 @@ static bool updateQueuedMeasurements(const uint32_t tick) {
     }
   }
 
-  planeDistanceMeasurement_t plane;
-  while (stateEstimatorHasPlaneDistancePacket(&plane))
-  {
-    kalmanCoreUpdateWithPlaneDistance(&coreData, &plane, gyro);
-    doneUpdate = true;
-  }
-
   return doneUpdate;
 }
 
