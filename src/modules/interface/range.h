@@ -21,8 +21,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program. If not, see <http://www.gnu.org/licenses/>.
  *
- * ranges.h: Centralize range measurements for different directions
- *           and make them available as log
+ * range.h: Centralize range measurements for different directions
+ *          and make them available as log
  */
 
 #include "stabilizer_types.h"
@@ -60,15 +60,5 @@ float rangeGet(rangeDirection_t direction);
  * @param distance Distance to the ground (m)
  * @param stdDev The standard deviation of the range sample
  * @param timeStamp The time when the range was sampled (in sys ticks)
- * @return true if the sample was successfully enqueued
  */
-bool rangeEnqueueDownRangeInEstimator(float distance, float stdDev, uint32_t timeStamp);
-
-/**
- * Enqueue a plane distance measurement in the current estimator
- *
- * @param *plane Pointer to planeDistanceMeasurement_t initialized with the relevant plane information.
- * @return true if the sample was successfully enqueued
- */
-bool rangeEnqueuePlaneDistanceInEstimator(planeDistanceMeasurement_t *plane);
-// FIXME Handle pragma once call?
+void rangeEnqueueDownRangeInEstimator(float distance, float stdDev, uint32_t timeStamp);
