@@ -305,8 +305,7 @@ INCLUDES += -I$(LIB)/STM32_USB_Device_Library/Core/inc
 INCLUDES += -I$(LIB)/STM32_USB_OTG_Driver/inc
 INCLUDES += -I$(LIB)/STM32F4xx_StdPeriph_Driver/inc
 INCLUDES += -I$(LIB)/vl53l1 -I$(LIB)/vl53l1/core/inc
-#INCLUDES += -I$(LIB)/osqp/include
-#TODO
+INCLUDES += -I$(LIB)/osqp/include
 
 CFLAGS += -g3
 ifeq ($(DEBUG), 1)
@@ -418,8 +417,8 @@ libarm_math.a:
 libosqp.a:
 	mkdir -p src/lib/osqp/build
 	cd src/lib/osqp/build; \
-	cmake -G "Unix Makefiles" ..
-#	cmake --build src/lib/osqp/build
+	cmake -G "Unix Makefiles" ..; \
+	cmake --build .
 
 clean_version:
 ifeq ($(SHELL),/bin/sh)
