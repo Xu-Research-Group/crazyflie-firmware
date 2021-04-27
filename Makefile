@@ -420,8 +420,9 @@ libarm_math.a:
 # TODO
 libosqp.a:
 	mkdir -p src/lib/osqp/build
-	cmake -G "Unix Makefiles" src/lib/osqp
-	cmake --build src/lib/osqp/build
+	cd src/lib/osqp/build; \
+	cmake -G "Unix Makefiles" ..
+#	cmake --build src/lib/osqp/build
 
 clean_version:
 ifeq ($(SHELL),/bin/sh)
