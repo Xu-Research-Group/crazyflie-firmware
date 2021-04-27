@@ -10,7 +10,6 @@
 #include "param.h"
 #include "math3d.h"
 
-// TODO
 #include "osqp.h"
 
 #define ATTITUDE_UPDATE_DT    (float)(1.0f/ATTITUDE_RATE)
@@ -109,7 +108,7 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
 
     // Apply CBF if enabled
     #ifdef APPLY_CBF
-    apply_cbf();
+    apply_cbf(state,setpoint);
     #endif
 
     // Saturate thrust and pqr
@@ -177,8 +176,9 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
   }
 }
 
-void apply_cbf(){
+void apply_cbf(const state_t *state){
     // Compute constraints
+    
 
     // Build QP program
     // Solve QP
