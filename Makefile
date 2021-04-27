@@ -275,10 +275,6 @@ endif
 
 # Libs
 PROJ_OBJ += libarm_math.a
-#TODO
-ifdef APPLY_CBF
-PROJ_OBJ += libosqp.a
-endif
 
 OBJ = $(FREERTOS_OBJ) $(PORT_OBJ) $(ST_OBJ) $(PROJ_OBJ) $(APP_OBJ) $(CRT0)
 
@@ -311,6 +307,7 @@ INCLUDES += -I$(LIB)/STM32F4xx_StdPeriph_Driver/inc
 INCLUDES += -I$(LIB)/vl53l1 -I$(LIB)/vl53l1/core/inc
 #INCLUDES += -I$(LIB)/osqp/include
 #TODO
+
 CFLAGS += -g3
 ifeq ($(DEBUG), 1)
   CFLAGS += -O0 -DDEBUG

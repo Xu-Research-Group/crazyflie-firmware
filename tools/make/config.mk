@@ -4,7 +4,7 @@
 CFLAGS += -DCF_MASS=0.034f # in kg
 
 # Enforce CBF?
-CFLAGS += -APPLY_CBF
+#CFLAGS += -APPLY_CBF
 
 # Force a default estimator with the line below
 #ESTIMATOR=kalman
