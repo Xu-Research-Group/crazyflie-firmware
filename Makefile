@@ -275,6 +275,10 @@ endif
 
 # Libs
 PROJ_OBJ += libarm_math.a
+#TODO
+ifdef APPLY_CBF
+PROJ_OBJ += libosqp.a
+endif
 
 OBJ = $(FREERTOS_OBJ) $(PORT_OBJ) $(ST_OBJ) $(PROJ_OBJ) $(APP_OBJ) $(CRT0)
 
@@ -305,7 +309,8 @@ INCLUDES += -I$(LIB)/STM32_USB_Device_Library/Core/inc
 INCLUDES += -I$(LIB)/STM32_USB_OTG_Driver/inc
 INCLUDES += -I$(LIB)/STM32F4xx_StdPeriph_Driver/inc
 INCLUDES += -I$(LIB)/vl53l1 -I$(LIB)/vl53l1/core/inc
-
+#INCLUDES += -I$(LIB)/osqp/include
+#TODO
 CFLAGS += -g3
 ifeq ($(DEBUG), 1)
   CFLAGS += -O0 -DDEBUG
@@ -412,6 +417,12 @@ bin/vendor:
 libarm_math.a:
 	+$(MAKE) -C $(CRAZYFLIE_BASE)/tools/make/cmsis_dsp/ CRAZYFLIE_BASE=$(abspath $(CRAZYFLIE_BASE)) PROJ_ROOT=$(CURDIR) V=$(V) CROSS_COMPILE=$(CROSS_COMPILE)
 
+# TODO
+libosqp.a:
+	mkdir -p src/lib/osqp/build
+	cmake -G "Unix Makefiles" src/lib/osqp
+	cmake --build src/lib/osqp/build
+
 clean_version:
 ifeq ($(SHELL),/bin/sh)
 	@echo "  CLEAN_VERSION"
@@ -476,7 +487,7 @@ erase:
 prep:
 	@$(CC) $(CFLAGS) -dM -E - < /dev/null
 
-check_submodules:
+check_submodules: libosqp.a
 	@cd $(CRAZYFLIE_BASE); $(PYTHON) tools/make/check-for-submodules.py
 
 include $(CRAZYFLIE_BASE)/tools/make/targets.mk
@@ -488,4 +499,4 @@ unit:
 # The flag "-DUNITY_INCLUDE_DOUBLE" allows comparison of double values in Unity. See: https://stackoverflow.com/a/37790196
 	rake unit "DEFINES=$(CFLAGS) -DUNITY_INCLUDE_DOUBLE" "FILES=$(FILES)" "UNIT_TEST_STYLE=$(UNIT_TEST_STYLE)"
 
-.PHONY: all clean build compile unit prep erase flash check_submodules trace openocd gdb halt reset flash_dfu flash_verify cload size print_version clean_version
+.PHONY: all clean build compile unit prep erase flash check_submodules trace openocd gdb halt reset flash_dfu flash_verify cload size print_version clean_version libosqp.a #TODO
