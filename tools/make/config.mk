@@ -3,6 +3,9 @@
 ## Weight of the Crazyflie, including decks. The default setting is a Crazyflie 2.X without decks.
 CFLAGS += -DCF_MASS=0.034f # in kg
 
+# Enforce CBF?
+CFLAGS += -APPLY_CBF
+
 # Force a default estimator with the line below
 #ESTIMATOR=kalman
 
