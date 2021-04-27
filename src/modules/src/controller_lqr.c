@@ -108,7 +108,9 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
 
     // Apply CBF if enabled
     #ifdef APPLY_CBF
-    apply_cbf(state,setpoint);
+	if(flying){
+        apply_cbf(state,100.0f, (float)EPSILON_CBF);
+    }
     #endif
 
     // Saturate thrust and pqr
@@ -176,13 +178,88 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
   }
 }
 
-void apply_cbf(const state_t *state){
-    // Compute constraints
-    
+int apply_cbf(const state_t *state, const float k, const float epsilon){
+    float phi = state->attitude.roll;
+    float theta = -state->attitude.pitch; // Opposite sign pitch from estimator
 
-    // Build QP program
-    // Solve QP
-    // Update u
+    // Cost function matrix P in CSC format and vector q  (min 1/2*x'Px + f'x)
+    c_float P_x[4] = {2.0f, 2.0f, 2.0f, 2.0f, };
+    c_int P_nnz = 4;
+    c_int P_i[4] = {0, 1, 2, 3, };
+    c_int P_p[5] = {0, 1, 2, 3, 4, };
+    c_float q[4] = {-2.0f*actuatorThrust, -2.0f*rateDesired.roll,
+                    -2.0f*rateDesired.pitch, -2.0f*rateDesired.yaw, }; // -2*u_LQR
+
+    // Constraint matrix A in CSC forma
+    float s_phi = arm_sin_f32((float)M_PI*phi/(2.0f*epsilon));
+    float s_theta = arm_sin_f32((float)M_PI*theta/(2.0f*epsilon));
+    c_float A_x[5] = {s_phi,
+                      s_phi*arm_sin_f32(phi)*arm_tan_f32(theta),
+                      s_theta*arm_cos_f32(phi),
+                      s_phi*arm_cos_f32(phi)*arm_tan_f32(theta),
+                      -s_theta*arm_sin_f32(phi), };
+    c_int A_nnz = 5;
+    c_int A_i[5] = {0, 0, 1, 0, 1, };
+    c_int A_p[5] = {0, 0, 1, 3, 5, };
+
+    // Upper and Lower bounds for the constraints
+    c_float l[2] = {-999999.9f, -999999.9f, }; // No lower bound
+    c_float u[2] = {k*arm_cos_f32((float)M_PI*state->attitude.roll/(2.0f*epsilon)),
+                    k*arm_cos_f32((float)M_PI*-state->attitude.pitch/(2.0f*epsilon)), }; // Upper bound NOTE pitch is opposite
+
+    // Problem size
+    c_int n = 4;
+    c_int m = 2;
+
+	// Exitflag
+    c_int exitflag = 0;
+
+    // Workspace structures
+    OSQPWorkspace *work;
+    OSQPSettings  *settings = (OSQPSettings *)c_malloc(sizeof(OSQPSettings));
+    OSQPData      *data     = (OSQPData *)c_malloc(sizeof(OSQPData));
+
+ 	// Populate data
+    if (data) {
+        data->n = n;
+        data->m = m;
+        data->P = csc_matrix(data->n, data->n, P_nnz, P_x, P_i, P_p);
+        data->q = q;
+        data->A = csc_matrix(data->m, data->n, A_nnz, A_x, A_i, A_p);
+        data->l = l;
+        data->u = u;
+    }
+
+	// Define solver settings as default
+    if (settings) {
+        osqp_set_default_settings(settings);
+        settings->alpha = 1.0; // Change alpha parameter
+    }
+
+	// Setup workspace
+    exitflag = osqp_setup(&work, data, settings);
+
+    // Solve Problem
+    osqp_solve(work);
+
+    // Retrieve solution if flag is 0
+    if(!exitflag){
+        actuatorThrust = work->solution.x[0];
+        rateDesired.roll = work->solution.x[1];
+        rateDesired.pitch = work->solution.x[2];
+        rateDesired.yaw = work->solution.x[3];
+    }
+
+    // Cleanup
+    if (data) {
+        if (data->A) c_free(data->A);
+        if (data->P) c_free(data->P);
+        c_free(data);
+    }
+    if (settings) c_free(settings);
+
+    // Return exitflag
+    return exitflag;
 }
 
 
