@@ -9,6 +9,7 @@
 #include "log.h"
 #include "param.h"
 #include "math3d.h"
+#include "cf_math.h"
 
 #include "osqp.h"
 
@@ -109,7 +110,7 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     // Apply CBF if enabled
     #ifdef APPLY_CBF
 	if(flying){
-        apply_cbf(state,100.0f, (float)EPSILON_CBF);
+        apply_cbf(state,100.0f, (float)EPSILON_CBF*DEG2RAD);
     }
     #endif
 
@@ -179,8 +180,8 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
 }
 
 int apply_cbf(const state_t *state, const float k, const float epsilon){
-    float phi = state->attitude.roll;
-    float theta = -state->attitude.pitch; // Opposite sign pitch from estimator
+    float phi = state->attitude.roll*DEG2RAD;
+    float theta = -state->attitude.pitch*DEG2RAD; // Opposite sign pitch from estimator
 
     // Cost function matrix P in CSC format and vector q  (min 1/2*x'Px + f'x)
     c_float P_x[4] = {2.0f, 2.0f, 2.0f, 2.0f, };
@@ -194,9 +195,9 @@ int apply_cbf(const state_t *state, const float k, const float epsilon){
     float s_phi = arm_sin_f32((float)M_PI*phi/(2.0f*epsilon));
     float s_theta = arm_sin_f32((float)M_PI*theta/(2.0f*epsilon));
     c_float A_x[5] = {s_phi,
-                      s_phi*arm_sin_f32(phi)*arm_tan_f32(theta),
+                      s_phi*arm_sin_f32(phi)*arm_sin_f32(theta)/arm_cos_f32(theta),
                       s_theta*arm_cos_f32(phi),
-                      s_phi*arm_cos_f32(phi)*arm_tan_f32(theta),
+                      s_phi*arm_cos_f32(phi)*arm_sin_f32(theta)/arm_cos_f32(theta),
                       -s_theta*arm_sin_f32(phi), };
     c_int A_nnz = 5;
     c_int A_i[5] = {0, 0, 1, 0, 1, };
@@ -244,10 +245,10 @@ int apply_cbf(const state_t *state, const float k, const float epsilon){
 
     // Retrieve solution if flag is 0
     if(!exitflag){
-        actuatorThrust = work->solution.x[0];
-        rateDesired.roll = work->solution.x[1];
-        rateDesired.pitch = work->solution.x[2];
-        rateDesired.yaw = work->solution.x[3];
+        actuatorThrust = work->solution->x[0];
+        rateDesired.roll = work->solution->x[1];
+        rateDesired.pitch = work->solution->x[2];
+        rateDesired.yaw = work->solution->x[3];
     }
 
     // Cleanup

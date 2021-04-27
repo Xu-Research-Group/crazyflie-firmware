@@ -35,5 +35,6 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
                                          const sensorData_t *sensors,
                                          const state_t *state,
                                          const uint32_t tick);
+int apply_cbf(const state_t *state, const float k, const float epsilon);
 
 #endif //__CONTROLLER_LQR_H__
