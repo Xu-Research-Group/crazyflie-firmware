@@ -10,6 +10,9 @@
 #include "param.h"
 #include "math3d.h"
 
+// TODO
+#include "osqp.h"
+
 #define ATTITUDE_UPDATE_DT    (float)(1.0f/ATTITUDE_RATE)
 #define DEG2RAD               (float)M_PI/180.0f
 #define RAD2DEG               180.0f/(float)M_PI
@@ -104,6 +107,11 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     rateDesired.pitch += setpoint->attitudeRate.pitch;
     rateDesired.yaw += setpoint->attitudeRate.yaw;
 
+    // Apply CBF if enabled
+    #ifdef APPLY_CBF
+    apply_cbf();
+    #endif
+
     // Saturate thrust and pqr
     actuatorThrust = fmaxf(fminf(actuatorThrust,18), 2);
     rateDesired.roll = fmaxf(fminf(rateDesired.roll,6),-6);
@@ -167,6 +175,14 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     attitudeControllerResetAllPID();
 
   }
+}
+
+void apply_cbf(){
+    // Compute constraints
+
+    // Build QP program
+    // Solve QP
+    // Update u
 }
 
 
