@@ -418,10 +418,10 @@ libarm_math.a:
 libosqp.a:
 	@ mkdir -p src/lib/osqp/build
 	cd src/lib/osqp/build; \
-	cmake -G "Unix Makefiles" ..; \
+	cmake -G "Unix Makefiles" -DEMBEDDED=2 ..; \
 	cmake --build .
-	+$(MAKE) -C $(CRAZYFLIE_BASE)/src/lib/osqp/build CRAZYFLIE_BASE=$(abspath $(CRAZYFLIE_BASE))
-	#cp src/lib/osqp/build/out/* $(BIN)
+	cp src/lib/osqp/build/out/* $(BIN)
+	#+$(MAKE) -C $(CRAZYFLIE_BASE)/src/lib/osqp/build
 
 clean_version:
 ifeq ($(SHELL),/bin/sh)
