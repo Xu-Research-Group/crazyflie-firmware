@@ -179,6 +179,7 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
   }
 }
 
+// TODO there is no csc_matrix() function with EMBEDDED. Build matrices manually with csc struct
 int apply_cbf(const state_t *state, const float k, const float epsilon){
     float phi = state->attitude.roll*DEG2RAD;
     float theta = -state->attitude.pitch*DEG2RAD; // Opposite sign pitch from estimator
@@ -216,48 +217,48 @@ int apply_cbf(const state_t *state, const float k, const float epsilon){
     c_int exitflag = 0;
 
     // Workspace structures
-    OSQPWorkspace *work;
-    OSQPSettings  *settings = (OSQPSettings *)c_malloc(sizeof(OSQPSettings));
-    OSQPData      *data     = (OSQPData *)c_malloc(sizeof(OSQPData));
+    OSQPWorkspace work;
+    //OSQPSettings  *settings = (OSQPSettings *)c_malloc(sizeof(OSQPSettings));
+    //OSQPData      *data     = (OSQPData *)c_malloc(sizeof(OSQPData));
 
  	// Populate data
-    if (data) {
-        data->n = n;
-        data->m = m;
-        data->P = csc_matrix(data->n, data->n, P_nnz, P_x, P_i, P_p);
-        data->q = q;
-        data->A = csc_matrix(data->m, data->n, A_nnz, A_x, A_i, A_p);
-        data->l = l;
-        data->u = u;
-    }
+    work.data->n = n;
+    work.data->m = m;
+    work.data->P = csc_matrix(work.data->n, work.data->n, P_nnz, P_x, P_i, P_p);
+    work.data->q = q;
+    work.data->A = csc_matrix(work.data->m, work.data->n, A_nnz, A_x, A_i, A_p);
+    work.data->l = l;
+    work.data->u = u;
 
 	// Define solver settings as default
-    if (settings) {
-        osqp_set_default_settings(settings);
-        settings->alpha = 1.0; // Change alpha parameter
-    }
+    work.settings->alpha = 1.0f; // Change alpha parameter
 
-	// Setup workspace
-    exitflag = osqp_setup(&work, data, settings);
+    //if (settings) {
+    //    osqp_set_default_settings(settings);
+    //    settings->alpha = 1.0; // Change alpha parameter
+    //}
+
+//    // Setup workspace
+//    exitflag = osqp_setup(&work, data, settings);
 
     // Solve Problem
-    osqp_solve(work);
+    exitflag = osqp_solve(&work);
 
     // Retrieve solution if flag is 0
     if(!exitflag){
-        actuatorThrust = work->solution->x[0];
-        rateDesired.roll = work->solution->x[1];
-        rateDesired.pitch = work->solution->x[2];
-        rateDesired.yaw = work->solution->x[3];
+        actuatorThrust = work.solution->x[0];
+        rateDesired.roll = work.solution->x[1];
+        rateDesired.pitch = work.solution->x[2];
+        rateDesired.yaw = work.solution->x[3];
     }
 
-    // Cleanup
-    if (data) {
-        if (data->A) c_free(data->A);
-        if (data->P) c_free(data->P);
-        c_free(data);
-    }
-    if (settings) c_free(settings);
+    //// Cleanup
+    //if (data) {
+    //    if (data->A) c_free(data->A);
+    //    if (data->P) c_free(data->P);
+    //    c_free(data);
+    //}
+    //if (settings) c_free(settings);
 
     // Return exitflag
     return exitflag;
