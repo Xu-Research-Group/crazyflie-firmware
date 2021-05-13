@@ -13,6 +13,3 @@
 [submodule "vendor/unity"]
 	path = vendor/unity
 	url = https://github.com/throwtheswitch/unity.git
-[submodule "src/lib/osqp"]
-	path = src/lib/osqp
-	url = https://github.com/oxfordcontrol/osqp
