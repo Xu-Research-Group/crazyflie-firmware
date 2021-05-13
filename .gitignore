@@ -16,6 +16,8 @@ tags
 /tag.*
 *.gch
 
+src/lib/osqp
+
 current_platform.mk
 
 /generated-test/**

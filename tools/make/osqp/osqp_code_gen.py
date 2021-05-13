@@ -15,6 +15,8 @@ import osqp
 import numpy as np
 from scipy import sparse
 
+# Target folder for source code
+src = './../../../src/lib/osqp'
 
 # Define problem data
 P = sparse.csc_matrix(2*np.eye(4))
@@ -29,4 +31,4 @@ m = osqp.OSQP()
 # Solver initialization
 m.setup(P, q, A, l, u)
 # Generate code
-m.codegen('./../code', force_rewrite=True, project_type='Makefile',parameters='matrices',FLOAT=True,LONG=False)
+m.codegen(src, force_rewrite=True, project_type='Makefile',parameters='matrices',FLOAT=True,LONG=False)
