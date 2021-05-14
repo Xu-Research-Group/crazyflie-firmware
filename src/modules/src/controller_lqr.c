@@ -183,92 +183,51 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
 }
 
 #ifdef OSQP_ENABLED
-// TODO there is no csc_matrix() function with EMBEDDED. Build matrices manually with csc struct
+// Use OSQP library to solve a QP-CBF
+// The osqp workspace is generated before compilation, see:
+// ~/tools/make/osqp/osqp_code_gen.py
 int apply_cbf(const state_t *state, const float k, const float epsilon){
-    float phi = state->attitude.roll*DEG2RAD;
-    float theta = -state->attitude.pitch*DEG2RAD; // Opposite sign pitch from estimator
+  // Convenient temp variables
+  float phi = state->attitude.roll*DEG2RAD;
+  float theta = -state->attitude.pitch*DEG2RAD; // Opposite sign pitch from estimator
 
-    // Cost function matrix P in CSC format and vector q  (min 1/2*x'Px + f'x)
-//    c_float P_x[4] = {2.0f, 2.0f, 2.0f, 2.0f, };
-//    c_int P_nnz = 4;
-//    c_int P_i[4] = {0, 1, 2, 3, };
-//    c_int P_p[5] = {0, 1, 2, 3, 4, };
-    c_float q[4] = {-2.0f*actuatorThrust, -2.0f*rateDesired.roll,
-                    -2.0f*rateDesired.pitch, -2.0f*rateDesired.yaw, }; // -2*u_LQR
-    osqp_update_lin_cost(&workspace, q); // Update q
+  // Update Linear Cost: -2*u_LQR
+  c_float q[4] = {-2.0f*actuatorThrust, -2.0f*rateDesired.roll,
+                  -2.0f*rateDesired.pitch, -2.0f*rateDesired.yaw, }; // -2*u_LQR
+  osqp_update_lin_cost(&workspace, q); // Update q
 
-    // Constraint matrix A in CSC format
-    float s_phi = arm_sin_f32((float)M_PI*phi/(2.0f*epsilon));
-    float s_theta = arm_sin_f32((float)M_PI*theta/(2.0f*epsilon));
-    c_float A_x[5] = {s_phi,
-                      s_phi*arm_sin_f32(phi)*arm_sin_f32(theta)/arm_cos_f32(theta),
-                      s_theta*arm_cos_f32(phi),
-                      s_phi*arm_cos_f32(phi)*arm_sin_f32(theta)/arm_cos_f32(theta),
+  // Update Constraint matrix A (CBF)
+  float s_phi = arm_sin_f32((float)M_PI*phi/(2.0f*epsilon));
+  float s_theta = arm_sin_f32((float)M_PI*theta/(2.0f*epsilon));
+  c_float A_x[5] = {s_phi,
+                    s_phi*arm_sin_f32(phi)*arm_sin_f32(theta)/arm_cos_f32(theta),
+                    s_theta*arm_cos_f32(phi),
+                    s_phi*arm_cos_f32(phi)*arm_sin_f32(theta)/arm_cos_f32(theta),
                       -s_theta*arm_sin_f32(phi), };
-    osqp_update_A(&workspace, A_x, OSQP_NULL, 5);
-    //c_int A_nnz = 5;
-    //c_int A_i[5] = {0, 0, 1, 0, 1, };
-    //c_int A_p[5] = {0, 0, 1, 3, 5, };
+  osqp_update_A(&workspace, A_x, OSQP_NULL, 5);
 
-    // Upper and Lower bounds for the constraints
-    //c_float l[2] = {-999999.9f, -999999.9f, }; // No lower bound
-    c_float u[2] = {k*arm_cos_f32((float)M_PI*state->attitude.roll/(2.0f*epsilon)),
-                    k*arm_cos_f32((float)M_PI*-state->attitude.pitch/(2.0f*epsilon)), }; // Upper bound NOTE pitch is opposite
-    osqp_update_upper_bound(&workspace,u);
+  // Update constraint upper bound (CBF)
+  // Lower bound is set to -9999 (-infty desired)
+  c_float u[2] = {k*arm_cos_f32((float)M_PI*state->attitude.roll/(2.0f*epsilon)),
+                  k*arm_cos_f32((float)M_PI*-state->attitude.pitch/(2.0f*epsilon)), }; // Upper bound NOTE pitch is opposite
+  osqp_update_upper_bound(&workspace,u);
 
-//    // Problem size
-//    c_int n = 4;
-//    c_int m = 2;
-//
-//	// Exitflag
-    c_int exitflag = 0;
-//
-//    // Workspace structures
-//    OSQPWorkspace work;
-//    //OSQPSettings  *settings = (OSQPSettings *)c_malloc(sizeof(OSQPSettings));
-//    //OSQPData      *data     = (OSQPData *)c_malloc(sizeof(OSQPData));
-//
-// 	// Populate data
-//    work.data->n = n;
-//    work.data->m = m;
-//    work.data->P = csc_matrix(work.data->n, work.data->n, P_nnz, P_x, P_i, P_p);
-//    work.data->q = q;
-//    work.data->A = csc_matrix(work.data->m, work.data->n, A_nnz, A_x, A_i, A_p);
-//    work.data->l = l;
-//    work.data->u = u;
-//
-//	// Define solver settings as default
-//    work.settings->alpha = 1.0f; // Change alpha parameter
-//
-//    //if (settings) {
-//    //    osqp_set_default_settings(settings);
-//    //    settings->alpha = 1.0; // Change alpha parameter
-//    //}
-//
-////    // Setup workspace
-////    exitflag = osqp_setup(&work, data, settings);
-//
-//    // Solve Problem
-//    exitflag = osqp_solve(&work);
-//
-//    // Retrieve solution if flag is 0
-//    if(!exitflag){
-//        actuatorThrust = work.solution->x[0];
-//        rateDesired.roll = work.solution->x[1];
-//        rateDesired.pitch = work.solution->x[2];
-//        rateDesired.yaw = work.solution->x[3];
-//    }
-//
-//    //// Cleanup
-//    //if (data) {
-//    //    if (data->A) c_free(data->A);
-//    //    if (data->P) c_free(data->P);
-//    //    c_free(data);
-//    //}
-//    //if (settings) c_free(settings);
+  // Exitflag
+  c_int exitflag = 1; // Start the flag with error
 
-    // Return exitflag
-    return exitflag;
+  // Solve Problem
+  exitflag = osqp_solve(&workspace); // Flag set to 0 if success
+
+  // Retrieve solution if flag is 0
+  if(!exitflag){
+    actuatorThrust = workspace.solution->x[0];
+    rateDesired.roll = workspace.solution->x[1];
+    rateDesired.pitch = workspace.solution->x[2];
+    rateDesired.yaw = workspace.solution->x[3];
+  }
+
+  // Return exitflag
+  return exitflag;
 }
 #endif // #ifdef OSQP_ENABLED
 
