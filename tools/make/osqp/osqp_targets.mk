@@ -1,5 +1,9 @@
 # OSQP Targets
 
+# List here the objects that include osqp.h to ensure OSQP is
+# compiled before them
+controller_lqr.o: $(OSQP_DIR)
+
 # Rule to make the osqp source %.c files if they are missing
 $(patsubst %.o,$(OSQP_SRC)/%.c,$(OSQP_OBJ)): $(OSQP_DIR)
 
