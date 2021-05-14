@@ -1,7 +1,16 @@
 # OSQP Targets
+
+# Rule to make the osqp source %.c files if they are missing
+$(patsubst %.o,$(OSQP_SRC)/%.c,$(OSQP_OBJ)): $(OSQP_DIR)
+
+# Rule to make the osqp automatic codegen directory from Python
+$(OSQP_DIR):$(OSQP_CODE_GEN)
+	@$(OSQP_CODE_GEN) $(OSQP_DIR)
+
 auxil.o: $(OSQP_SRC)/auxil.c
 	@$(if $(QUIET), ,echo $(CC_COMMAND$(VERBOSE)) )
 	@$(CC_COMMAND)
+	@rm -rf $(CRAZYFLIE_BASE)/*.so
 
 error.o: $(OSQP_SRC)/error.c
 	@$(if $(QUIET), ,echo $(CC_COMMAND$(VERBOSE)) )
@@ -42,3 +51,7 @@ util.o: $(OSQP_SRC)/util.c
 workspace.o: $(OSQP_SRC)/workspace.c
 	@$(if $(QUIET), ,echo $(CC_COMMAND$(VERBOSE)) )
 	@$(CC_COMMAND)
+
+osqp_clean:
+	-rm -rf $(OSQP_DIR)
+.PHONY: osqp_clean

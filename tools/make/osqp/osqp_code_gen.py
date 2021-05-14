@@ -14,9 +14,10 @@ CRAZYFLIE_BASE/src/lib/osqp
 import osqp
 import numpy as np
 from scipy import sparse
+import sys
 
-# Target folder for source code
-src = './../../../src/lib/osqp'
+# Target folder for source code is passed as parameter
+src = sys.argv[1]
 
 # Define problem data
 P = sparse.csc_matrix(2*np.eye(4))

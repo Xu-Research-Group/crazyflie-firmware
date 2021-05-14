@@ -4,7 +4,7 @@
 CFLAGS += -DCF_MASS=0.034f # in kg
 
 # Set to 1 to add OSQP to firmware compilation
-COMPILE_OSQP := 1
+#COMPILE_OSQP := 1
 
 # Enforce CBF?
 CFLAGS += -DEPSILON_CBF=30.0f # in deg
