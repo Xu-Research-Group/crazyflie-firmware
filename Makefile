@@ -275,6 +275,12 @@ endif
 
 # Libs
 PROJ_OBJ += libarm_math.a
+ifeq ($(COMPILE_OSQP), 1)
+include $(CRAZYFLIE_BASE)/tools/make/osqp/osqp.mk
+PROJ_OBJ += $(OSQP_OBJ)
+INCLUDES += $(OSQP_INCLUDE)
+CFLAGS += -DOSQP_ENABLED
+endif
 
 OBJ = $(FREERTOS_OBJ) $(PORT_OBJ) $(ST_OBJ) $(PROJ_OBJ) $(APP_OBJ) $(CRT0)
 
@@ -480,6 +486,9 @@ check_submodules:
 	@cd $(CRAZYFLIE_BASE); $(PYTHON) tools/make/check-for-submodules.py
 
 include $(CRAZYFLIE_BASE)/tools/make/targets.mk
+ifeq ($(COMPILE_OSQP), 1)
+include $(CRAZYFLIE_BASE)/tools/make/osqp/osqp_targets.mk
+endif
 
 #include dependencies
 -include $(DEPS)
