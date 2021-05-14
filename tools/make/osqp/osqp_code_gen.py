@@ -10,11 +10,20 @@ The output of this program is a folder containing the C
 source code called "osqp" and it is placed in
 CRAZYFLIE_BASE/src/lib/osqp
 """
-
-import osqp
 import numpy as np
 from scipy import sparse
 import sys
+try:
+    import osqp
+except ImportError as e:
+    print()
+    print("ERROR (python3):",e)
+    print("Cannot generate OSQP source code. Either:")
+    print("  1. Unset COMPILE_OSQP flag in 'config.mk' or")
+    print("  2. Install with: 'pip3 install osqp'")
+    print()
+    sys.exit(1)
+
 
 # Target folder for source code is passed as parameter
 src = sys.argv[1]
