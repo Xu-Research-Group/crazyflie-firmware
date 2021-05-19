@@ -32,13 +32,15 @@ src = sys.argv[1]
 P = sparse.csc_matrix(2*np.eye(4))
 q = np.array([1, 1, 1, 1])
 A = sparse.csc_matrix([[0, 1, 1, 1], [0, 0, 1, 1]])
-l = np.array([-9999, -9999])
-u = np.array([9999, 9999])
+l = np.array([-np.inf, -np.inf])
+u = np.array([np.inf, np.inf])
 
 
 # Create an OSQP object
 m = osqp.OSQP()
+
 # Solver initialization
-m.setup(P, q, A, l, u)
+m.setup(P, q, A, l, u, max_iter=20)
+
 # Generate code
 m.codegen(src, force_rewrite=True, project_type='Makefile',parameters='matrices',FLOAT=True,LONG=False)

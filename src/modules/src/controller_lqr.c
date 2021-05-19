@@ -112,9 +112,9 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
 
     // Apply CBF if enabled
     #ifdef OSQP_ENABLED
-//	if(flying){
-//        apply_cbf(state,10.0f, (float)EPSILON_CBF*DEG2RAD);
-//  }
+	if(flying){
+      apply_cbf(state,10.0f, (float)EPSILON_CBF*DEG2RAD);
+    }
     #endif
 
     // Saturate thrust and pqr
