@@ -39,4 +39,7 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
 int apply_cbf(const state_t *state, const float k, const float epsilon);
 #endif // ifdef OSQP_ENABLED
 
+// Updates the [i][j] entry of the K matrix with value
+void update_K_entry(const uint8_t i, const uint8_t j, float value);
+
 #endif //__CONTROLLER_LQR_H__

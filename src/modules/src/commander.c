@@ -32,6 +32,7 @@
 #include "commander.h"
 #include "crtp_commander.h"
 #include "crtp_commander_high_level.h"
+#include "crtp_commander_sdlqr.h"
 
 #include "cf_math.h"
 #include "param.h"
@@ -64,6 +65,7 @@ void commanderInit(void)
 
   crtpCommanderInit();
   crtpCommanderHighLevelInit();
+  crtpCommanderSDLQRInit();
   lastUpdate = xTaskGetTickCount();
 
   isInit = true;
@@ -134,6 +136,7 @@ void commanderGetSetpoint(setpoint_t *setpoint, const state_t *state)
 
 bool commanderTest(void)
 {
+  isInit = crtpCommanderSDLQRTest();
   return isInit;
 }
 

@@ -188,6 +188,7 @@ PROJ_OBJ += mm_tdoa_robust.o mm_distance_robust.o
 
 # High-Level Commander
 PROJ_OBJ += crtp_commander_high_level.o planner.o pptraj.o pptraj_compressed.o
+PROJ_OBJ += crtp_commander_sdlqr.o
 
 # Deck Core
 PROJ_OBJ += deck.o deck_info.o deck_drivers.o deck_test.o deck_memory.o

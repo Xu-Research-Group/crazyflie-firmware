@@ -1,3 +1,8 @@
+/**
+ *   Authored by Victor Freire (https://xu.me.wisc.edu/), May 2021
+ *
+ *
+ */
 
 #include "stabilizer.h"
 #include "stabilizer_types.h"
@@ -10,6 +15,9 @@
 #include "param.h"
 #include "math3d.h"
 #include "cf_math.h"
+#include "debug.h"
+
+#include "crtp_commander_sdlqr.h"
 
 #ifdef OSQP_ENABLED
   #include "osqp.h"
@@ -25,6 +33,7 @@ static bool tiltCompensationEnabled = false;
 static attitude_t rateDesired;
 static state_t x_c;
 static float actuatorThrust;
+static float K[4][9]; // Kalman Gain
 
 static float cmd_thrust;
 static float cmd_roll;
@@ -40,6 +49,17 @@ static bool flying = false;
 
 void controllerLqrInit(void)
 {
+  // Initialize Kalman gain with default Linearization
+  K[0][2] = 10.0f;
+  K[0][8] = 5.4772f;
+  K[1][1] = -4.4721f;
+  K[1][3] = 7.6869f;
+  K[1][7] = -3.0014f;
+  K[2][0] = 4.4721f;
+  K[2][4] = 7.6869f;
+  K[2][6] = 3.0014f;
+  K[3][5] = 1.0f;
+
   attitudeControllerInit(ATTITUDE_UPDATE_DT);
 }
 
@@ -96,13 +116,19 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     err_z = state->position.z - x_c.position.z;
 
     // DU = -K*(x - x_des)
-    actuatorThrust = -(31.6228f*(err_z) + 12.7768f*(state->velocity.z - x_c.velocity.z)); // c (norm thrust)
+//    actuatorThrust = -(31.6228f*(err_z) + 12.7768f*(state->velocity.z - x_c.velocity.z)); // c (norm thrust)
+//
+//    rateDesired.roll = -(-4.4721f*(err_y) + 7.6869f*(state->attitude.roll*DEG2RAD - x_c.attitude.roll) - 3.0014f*(state->velocity.y - x_c.velocity.y)); // p
+//
+//    rateDesired.pitch = -(4.4721f*(err_x) + 7.6869f*(-state->attitude.pitch*DEG2RAD - x_c.attitude.pitch) + 3.0014f*(state->velocity.x - x_c.velocity.x)); // q
+//
+//    rateDesired.yaw = -(state->attitude.yaw*DEG2RAD - x_c.attitude.yaw); // r
+    // \deltau = -K*(x_hat-x_r)
+    actuatorThrust = -(K[0][2]*(err_z) + K[0][8]*(state->velocity.z - x_c.velocity.z)); // T (norm thrust)
+    rateDesired.roll = -(K[1][1]*(err_y) + K[1][3]*(state->attitude.roll*DEG2RAD - x_c.attitude.roll) + K[1][7]*(state->velocity.y - x_c.velocity.y)); // p
+    rateDesired.pitch = -(K[2][0]*(err_x) + K[2][4]*(-state->attitude.pitch*DEG2RAD - x_c.attitude.pitch) + K[2][6]*(state->velocity.x - x_c.velocity.x)); // q
+    rateDesired.yaw = -(K[3][5]*(state->attitude.yaw*DEG2RAD - x_c.attitude.yaw)); // r
 
-    rateDesired.roll = -(-4.4721f*(err_y) + 7.6869f*(state->attitude.roll*DEG2RAD - x_c.attitude.roll) - 3.0014f*(state->velocity.y - x_c.velocity.y)); // p
-
-    rateDesired.pitch = -(4.4721f*(err_x) + 7.6869f*(-state->attitude.pitch*DEG2RAD - x_c.attitude.pitch) + 3.0014f*(state->velocity.x - x_c.velocity.x)); // q
-
-    rateDesired.yaw = -(state->attitude.yaw*DEG2RAD - x_c.attitude.yaw); // r
 
     // Add u_0 | u = DU + u_0
     actuatorThrust += setpoint->thrust;
@@ -180,6 +206,11 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     attitudeControllerResetAllPID();
 
   }
+}
+
+// Public function to update entries of K (see crtp_commander_sdlqr)
+void update_K_entry(const uint8_t i, const uint8_t j, float value){
+    K[i][j] = value;
 }
 
 #ifdef OSQP_ENABLED
