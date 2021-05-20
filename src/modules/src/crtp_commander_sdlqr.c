@@ -62,13 +62,13 @@ void crtpCommanderSDLQRTask(void * parameters){
 
 // Decoder switch for each row of matrix K. Returns the updated row
 int handlePacket(const uint8_t row, const void *data, size_t datalen){
-  DEBUG_PRINT("COMMANDER: SDLQR Packet received\n"); // Signal
   const struct MatrixRowPacket_s *K_row = data;
   ASSERT(datalen == sizeof(struct MatrixRowPacket_s));
   // Convert and Store in K
   for (int i=0; i<9; i++){
       update_K_entry(row,i,(float)K_row->entries[i]/1000.0f);
   }
+  //DEBUG_PRINT("SDLQR: Row %d received K[%d][0] = %d \n",row,row,(int)K_row->entries[0]); // Signal
   return row;
 }
 
