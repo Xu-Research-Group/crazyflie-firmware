@@ -1,3 +1,8 @@
+/**
+ *   Authored by Victor Freire (https://xu.me.wisc.edu/), May 2021
+ *
+ *
+ */
 
 #include "stabilizer.h"
 #include "stabilizer_types.h"
@@ -10,6 +15,9 @@
 #include "param.h"
 #include "math3d.h"
 #include "cf_math.h"
+#include "debug.h"
+
+#include "crtp_commander_sdlqr.h"
 
 #ifdef OSQP_ENABLED
   #include "osqp.h"
@@ -23,8 +31,9 @@
 static bool tiltCompensationEnabled = false;
 
 static attitude_t rateDesired;
-static state_t x_c;
+static state_t err;
 static float actuatorThrust;
+static float K[4][9]; // Kalman Gain
 
 static float cmd_thrust;
 static float cmd_roll;
@@ -33,13 +42,21 @@ static float cmd_yaw;
 static float r_roll;
 static float r_pitch;
 static float r_yaw;
-static float err_x;
-static float err_y;
-static float err_z;
 static bool flying = false;
 
 void controllerLqrInit(void)
 {
+  // Initialize Kalman gain with default Linearization
+  K[0][2] = 10.0f;
+  K[0][8] = 5.4772f;
+  K[1][1] = -4.4721f;
+  K[1][3] = 7.6869f;
+  K[1][7] = -3.0014f;
+  K[2][0] = 4.4721f;
+  K[2][4] = 7.6869f;
+  K[2][6] = 3.0014f;
+  K[3][5] = 1.0f;
+
   attitudeControllerInit(ATTITUDE_UPDATE_DT);
 }
 
@@ -52,19 +69,19 @@ bool controllerLqrTest(void)
   return pass;
 }
 
-static float capAngle(float angle) {
-  float result = angle;
-
-  while (result > 180.0f) {
-    result -= 360.0f;
-  }
-
-  while (result < -180.0f) {
-    result += 360.0f;
-  }
-
-  return result;
-}
+//static float capAngle(float angle) {
+//  float result = angle;
+//
+//  while (result > 180.0f) {
+//    result -= 360.0f;
+//  }
+//
+//  while (result < -180.0f) {
+//    result += 360.0f;
+//  }
+//
+//  return result;
+//}
 
 void controllerLqr(control_t *control, setpoint_t *setpoint,
                                          const sensorData_t *sensors,
@@ -79,38 +96,42 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     else
         flying = false;
 
-    // Update setpoint x_c
-    x_c.position.x = setpoint->position.x;
-    x_c.position.y = setpoint->position.y;
-    x_c.position.z = setpoint->position.z;
-    x_c.attitude.roll = setpoint->attitude.roll;
-    x_c.attitude.pitch = setpoint->attitude.pitch;
-    x_c.attitude.yaw = capAngle(setpoint->attitude.yaw);
-    x_c.velocity.x = setpoint->velocity.x;
-    x_c.velocity.y = setpoint->velocity.y;
-    x_c.velocity.z = setpoint->velocity.z;
+    // Compute errors in state err = \hat{x} - x_r
+    err.position.x = state->position.x - setpoint->position.x;
+    err.position.y = state->position.y - setpoint->position.y;
+    err.position.z = state->position.z - setpoint->position.z;
+    err.attitude.roll = state->attitude.roll*DEG2RAD - setpoint->attitude.roll;
+    err.attitude.pitch = -state->attitude.pitch*DEG2RAD - setpoint->attitude.pitch;
+    err.attitude.yaw = state->attitude.yaw*DEG2RAD - setpoint->attitude.yaw;
+    err.velocity.x = state->velocity.x - setpoint->velocity.x;
+    err.velocity.y = state->velocity.y - setpoint->velocity.y;
+    err.velocity.z = state->velocity.z - setpoint->velocity.z;
 
-    // Compute error in position
-    err_x = state->position.x - x_c.position.x;
-    err_y = state->position.y - x_c.position.y;
-    err_z = state->position.z - x_c.position.z;
+    // Negative state feedback: \deltau = -K*err
+    actuatorThrust    = -(K[0][0]*err.position.x    + K[0][1]*err.position.y     + K[0][2]*err.position.z
+                        + K[0][3]*err.attitude.roll + K[0][4]*err.attitude.pitch + K[0][5]*err.attitude.yaw
+                        + K[0][6]*err.velocity.x    + K[0][7]*err.velocity.y     + K[0][8]*err.velocity.z);   // T (norm thrust)
 
-    // DU = -K*(x - x_des)
-    actuatorThrust = -(31.6228f*(err_z) + 12.7768f*(state->velocity.z - x_c.velocity.z)); // c (norm thrust)
+    rateDesired.roll  = -(K[1][0]*err.position.x    + K[1][1]*err.position.y     + K[1][2]*err.position.z
+                        + K[1][3]*err.attitude.roll + K[1][4]*err.attitude.pitch + K[1][5]*err.attitude.yaw
+                        + K[1][6]*err.velocity.x    + K[1][7]*err.velocity.y     + K[1][8]*err.velocity.z);   // p
 
-    rateDesired.roll = -(-4.4721f*(err_y) + 7.6869f*(state->attitude.roll*DEG2RAD - x_c.attitude.roll) - 3.0014f*(state->velocity.y - x_c.velocity.y)); // p
+    rateDesired.pitch = -(K[2][0]*err.position.x    + K[2][1]*err.position.y     + K[2][2]*err.position.z
+                        + K[2][3]*err.attitude.roll + K[2][4]*err.attitude.pitch + K[2][5]*err.attitude.yaw
+                        + K[2][6]*err.velocity.x    + K[2][7]*err.velocity.y     + K[2][8]*err.velocity.z);   // q
 
-    rateDesired.pitch = -(4.4721f*(err_x) + 7.6869f*(-state->attitude.pitch*DEG2RAD - x_c.attitude.pitch) + 3.0014f*(state->velocity.x - x_c.velocity.x)); // q
+    rateDesired.yaw   = -(K[3][0]*err.position.x    + K[3][1]*err.position.y     + K[3][2]*err.position.z
+                        + K[3][3]*err.attitude.roll + K[3][4]*err.attitude.pitch + K[3][5]*err.attitude.yaw
+                        + K[3][6]*err.velocity.x    + K[3][7]*err.velocity.y     + K[3][8]*err.velocity.z);   // r
 
-    rateDesired.yaw = -(state->attitude.yaw*DEG2RAD - x_c.attitude.yaw); // r
 
-    // Add u_0 | u = DU + u_0
+    // Add nominal control:  u = u_r + \deltau
     actuatorThrust += setpoint->thrust;
     rateDesired.roll += setpoint->attitudeRate.roll;
     rateDesired.pitch += setpoint->attitudeRate.pitch;
     rateDesired.yaw += setpoint->attitudeRate.yaw;
 
-    // Apply CBF if enabled
+    // Apply CBF if enabled //TODO add CBF flag besides OSQP flag
     #ifdef OSQP_ENABLED
 	if(flying){
       apply_cbf(state,10.0f, (float)EPSILON_CBF*DEG2RAD);
@@ -130,7 +151,7 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     rateDesired.yaw = rateDesired.yaw*RAD2DEG;
 
     // Set thrust to 0 if z_desired is 0 and we are close to target
-    if((err_x + err_y + err_z) < 0.1f && x_c.position.z == 0)
+    if((err.position.x + err.position.y + err.position.y) < 0.075f && setpoint->position.z == 0)
         flying = false;
     if(!flying){
         actuatorThrust = 0;
@@ -180,6 +201,11 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     attitudeControllerResetAllPID();
 
   }
+}
+
+// Public function to update entries of K (see crtp_commander_sdlqr)
+void update_K_entry(const uint8_t i, const uint8_t j, float value){
+    K[i][j] = value;
 }
 
 #ifdef OSQP_ENABLED
