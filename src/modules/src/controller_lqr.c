@@ -44,6 +44,12 @@ static float r_pitch;
 static float r_yaw;
 static bool flying = false;
 
+// Logging parameters
+static float u_T;
+static float u_p;
+static float u_q;
+static float u_r;
+
 void controllerLqrInit(void)
 {
   // Initialize Kalman gain with default Linearization
@@ -130,6 +136,12 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     rateDesired.roll += setpoint->attitudeRate.roll;
     rateDesired.pitch += setpoint->attitudeRate.pitch;
     rateDesired.yaw += setpoint->attitudeRate.yaw;
+
+    // Parameter logging
+    u_T = actuatorThrust;
+    u_p = rateDesired.roll;
+    u_q = rateDesired.pitch;
+    u_r = rateDesired.yaw;
 
     // Apply CBF if enabled //TODO add CBF flag besides OSQP flag
     #ifdef OSQP_ENABLED
@@ -266,6 +278,10 @@ LOG_ADD(LOG_FLOAT, cmd_yaw, &cmd_yaw)
 LOG_ADD(LOG_FLOAT, r_roll, &r_roll)
 LOG_ADD(LOG_FLOAT, r_pitch, &r_pitch)
 LOG_ADD(LOG_FLOAT, r_yaw, &r_yaw)
+LOG_ADD(LOG_FLOAT, u_T, &u_T)
+LOG_ADD(LOG_FLOAT, u_p, &u_p)
+LOG_ADD(LOG_FLOAT, u_q, &u_q)
+LOG_ADD(LOG_FLOAT, u_r, &u_r)
 LOG_ADD(LOG_FLOAT, actuatorThrust, &actuatorThrust)
 LOG_ADD(LOG_FLOAT, rollRate,  &rateDesired.roll)
 LOG_ADD(LOG_FLOAT, pitchRate, &rateDesired.pitch)
