@@ -1,13 +1,13 @@
 ## Copy this file to config.mk and modify to get you personal build configuration
 
 ## Weight of the Crazyflie, including decks. The default setting is a Crazyflie 2.X without decks.
-CFLAGS += -DCF_MASS=0.034f # in kg
+CFLAGS += -DCF_MASS=0.032f # in kg
 
 # Set to 1 to add OSQP to firmware compilation
 #COMPILE_OSQP := 1
 
 # Enforce CBF?
-CFLAGS += -DEPSILON_CBF=30.0f # in deg
+#CFLAGS += -DEPSILON_CBF=30.0f # in deg
 
 # Force a default estimator with the line below
 #ESTIMATOR=kalman
