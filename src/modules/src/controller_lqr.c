@@ -8,6 +8,7 @@
 #include "stabilizer_types.h"
 
 #include "attitude_controller.h"
+#include "pid.h"
 #include "sensfusion6.h"
 #include "controller_lqr.h"
 
@@ -25,6 +26,9 @@
 #endif
 
 #define ATTITUDE_UPDATE_DT    (float)(1.0f/ATTITUDE_RATE)
+#define Z_PID_UPDATE_DT    (float)(1.0f/POSITION_RATE)
+#define PID_Z_KI           1.0f
+#define Z_LPF_CUTOFF_FREQ  20.0f
 #define DEG2RAD               (float)M_PI/180.0f
 #define RAD2DEG               180.0f/(float)M_PI
 
@@ -34,6 +38,7 @@ static attitude_t rateDesired;
 static state_t err;
 static float actuatorThrust;
 static float K[4][9]; // Kalman Gain
+PidObject pidT; // PID object for altitude (integral)
 
 static float cmd_thrust;
 static float cmd_roll;
@@ -49,20 +54,47 @@ static float u_T;
 static float u_p;
 static float u_q;
 static float u_r;
+static float pid_T;
+
+// Private function: Takes normalized thrust (m/s^2) and returns pwm units
+static int to_pwm(float T){
+    // 0 = a*(rpm)^2 -b*rpm + c - mass_in_gram
+    float a = 109e-9f;
+    float b = 210.6e-6f;
+    float c = 0.154f;
+    // RPM -> PWM conversion
+    // rpm = d*pwm + e
+    float d = 0.2685f;
+    float e = 4070.3f;
+    // Convert T to grams
+    float g = (CF_MASS*1000.0f*T)/9.81f; // Mass in grams
+
+    float r = (b+sqrtf(powf(b,2)-4*a*(c-g)))/(2*a); // Quadratic formula (+)
+    int pwm = (int) ((r-e)/d);
+    pwm -= 9000; // Offset calibration
+    return pwm;
+}
 
 void controllerLqrInit(void)
 {
   // Initialize Kalman gain with default Linearization
-  K[0][2] = 10.0f;
-  K[0][8] = 5.4772f;
-  K[1][1] = -4.4721f;
+  K[0][2] = 31.6228f;
+  K[0][8] = 12.7768f;
+  K[1][1] = -4.4732f;
   K[1][3] = 7.6869f;
   K[1][7] = -3.0014f;
-  K[2][0] = 4.4721f;
+  K[2][0] = 4.4732f;
   K[2][4] = 7.6869f;
   K[2][6] = 3.0014f;
   K[3][5] = 1.0f;
 
+  // Initialize altitude pid (T)
+  pidInit(&pidT, 0, 0, PID_Z_KI, 0, Z_PID_UPDATE_DT, POSITION_RATE,
+           Z_LPF_CUTOFF_FREQ, false);
+  pidSetIntegralLimit(&pidT, 0.5); // [m] integral limit
+  pidT.outputLimit = 0.5; // [m/s^2] output limit
+
+  // Initialize attitude rate controller
   attitudeControllerInit(ATTITUDE_UPDATE_DT);
 }
 
@@ -75,19 +107,6 @@ bool controllerLqrTest(void)
   return pass;
 }
 
-//static float capAngle(float angle) {
-//  float result = angle;
-//
-//  while (result > 180.0f) {
-//    result -= 360.0f;
-//  }
-//
-//  while (result < -180.0f) {
-//    result += 360.0f;
-//  }
-//
-//  return result;
-//}
 
 void controllerLqr(control_t *control, setpoint_t *setpoint,
                                          const sensorData_t *sensors,
@@ -137,6 +156,11 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     rateDesired.pitch += setpoint->attitudeRate.pitch;
     rateDesired.yaw += setpoint->attitudeRate.yaw;
 
+    // Add altitude integral action
+    pidSetDesired(&pidT, setpoint->position.z);
+    pid_T = pidUpdate(&pidT, state->position.z, true);
+    actuatorThrust += pid_T;
+
     // Parameter logging
     u_T = actuatorThrust;
     u_p = rateDesired.roll;
@@ -156,8 +180,9 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     rateDesired.pitch = fmaxf(fminf(rateDesired.pitch,6),-6);
     rateDesired.yaw = fmaxf(fminf(rateDesired.yaw,6),-6);
 
-    // convert [c, p, q, r] to 0xFFFF and deg/s
-    actuatorThrust = 19549.0f*sqrtf(actuatorThrust) - 15159.0f; // Convert to PWM units
+    // convert [T, p, q, r] to 0xFFFF and deg/s
+    actuatorThrust = to_pwm(actuatorThrust);
+    //actuatorThrust = 19549.0f*sqrtf(actuatorThrust) - 15159.0f; // Convert to PWM units
     rateDesired.roll = rateDesired.roll*RAD2DEG;
     rateDesired.pitch = rateDesired.pitch*RAD2DEG;
     rateDesired.yaw = rateDesired.yaw*RAD2DEG;
@@ -211,6 +236,7 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     cmd_yaw = control->yaw;
 
     attitudeControllerResetAllPID();
+    pidReset(&pidT); // Reset the altitude pid
 
   }
 }
@@ -282,6 +308,7 @@ LOG_ADD(LOG_FLOAT, u_T, &u_T)
 LOG_ADD(LOG_FLOAT, u_p, &u_p)
 LOG_ADD(LOG_FLOAT, u_q, &u_q)
 LOG_ADD(LOG_FLOAT, u_r, &u_r)
+LOG_ADD(LOG_FLOAT, pid_T, &pid_T)
 LOG_ADD(LOG_FLOAT, actuatorThrust, &actuatorThrust)
 LOG_ADD(LOG_FLOAT, rollRate,  &rateDesired.roll)
 LOG_ADD(LOG_FLOAT, pitchRate, &rateDesired.pitch)
