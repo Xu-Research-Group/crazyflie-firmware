@@ -1,7 +1,11 @@
 ## Copy this file to config.mk and modify to get you personal build configuration
 
 ## Weight of the Crazyflie, including decks. The default setting is a Crazyflie 2.X without decks.
-CFLAGS += -DCF_MASS=0.032f # in kg
+#CFLAGS += -DCF_MASS=0.032f # in kg (MOCAP Deck)
+CFLAGS += -DCF_MASS=0.037f # in kg (AI Deck + MOCAP Deck)
+
+## Enable the AI Deck CBF-QP for controller_lqr
+CFLAGS += -DAI_CBF
 
 # Set to 1 to add OSQP to firmware compilation
 #COMPILE_OSQP := 1
