@@ -47,8 +47,12 @@
 #include "uart1.h"
 #include "uart2.h"
 
+#include "controller_lqr.h"
+
 static bool isInit = false;
-static uint8_t byte;
+static char byte;
+static char rx_buffer[40];
+static u_t u;
 
 //Uncomment when NINA printout read is desired from console
 //#define DEBUG_NINA_PRINT
@@ -80,6 +84,20 @@ static void NinaTask(void *param)
 }
 #endif
 
+static void update_u(u_t *u, char *buff){
+    const char s[2] = ",";
+    char *token;
+
+    token = strtok(buff, s); // Get the first token
+    DEBUG_PRINT("token = %s\n",token);
+
+    while(token != NULL){
+        DEBUG_PRINT("%s\n",token);
+        token = strtok(NULL,s);
+    }
+
+}
+
 static void Gap8Task(void *param)
 {
     systemWaitStart();
@@ -93,9 +111,22 @@ static void Gap8Task(void *param)
     pinMode(DECK_GPIO_IO4, INPUT_PULLUP);
 
     // Read out the byte the Gap8 sends and immediately send it to the console.
+    int i = 0;
     while (1)
     {
-        uart1GetDataWithDefaultTimeout(&byte);
+        uart1Getchar(&byte);
+        rx_buffer[i] = byte; // Populate buffer
+        DEBUG_PRINT("buff[i] = %c\n",rx_buffer[i]);
+        DEBUG_PRINT("buff = %s\n",rx_buffer);
+        DEBUG_PRINT("byte = %c\n",byte);
+        i++; // Increment
+        if(byte == '\n'){
+            update_u(&u, rx_buffer);
+            DEBUG_PRINT("u.T = %.4f\n",(double)u.T);
+            i = 0; // Reset counter
+        }
+        //uart1GetDataWithDefaultTimeout(&byte);
+        //DEBUG_PRINT("Received byte: %c\n",byte);
     }
 }
 

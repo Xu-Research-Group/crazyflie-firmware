@@ -26,9 +26,9 @@
 #endif
 
 #ifdef AI_CBF
-#include "uart1.h"
-u_t aideckRxBuffer;
-volatile uint8_t dma_flag = 0;
+//#include "uart1.h"
+//u_t aideckRxBuffer;
+//volatile uint8_t dma_flag = 0;
 #endif
 
 #define ATTITUDE_UPDATE_DT    (float)(1.0f/ATTITUDE_RATE)
@@ -104,8 +104,8 @@ void controllerLqrInit(void)
   attitudeControllerInit(ATTITUDE_UPDATE_DT);
 
   #ifdef AI_CBF
-  // Initialize DMA for AI Deck Receiving of u
-  USART_DMA_Start(115200, &aideckRxBuffer, sizeof(u_t));
+//  // Initialize DMA for AI Deck Receiving of u
+//  USART_DMA_Start(115200, &aideckRxBuffer, sizeof(u_t));
   #endif
 
 }
@@ -187,12 +187,12 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     #endif
 
     #ifdef AI_CBF
-    // Apply AI Deck CBF-QP TODO
-    if(dma_flag==1){
-        dma_flag = 0; // Clear the flag
-        DEBUG_PRINT("CBFQP: u[0] = %.4f\n",(double)aideckRxBuffer.T);
-        memset(&aideckRxBuffer, 0, sizeof(u_t));
-    }
+//    // Apply AI Deck CBF-QP TODO
+//    if(dma_flag==1){
+//        dma_flag = 0; // Clear the flag
+//        DEBUG_PRINT("CBFQP: u[0] = %.4f\n",(double)aideckRxBuffer.T);
+//        memset(&aideckRxBuffer, 0, sizeof(u_t));
+//    }
     #endif
 
     // Saturate thrust and pqr
@@ -319,27 +319,27 @@ int apply_cbf(const state_t *state, const float k, const float epsilon){
 
 
 #ifdef AI_CBF
-void __attribute__((used)) DMA1_Stream1_IRQHandler(void){
-  DMA_ClearFlag(DMA1_Stream1, UART3_RX_DMA_ALL_FLAGS);
-  dma_flag = 1;
-}
-
-void USART_DMA_Start(uint32_t baudrate, u_t *aideckRxBuffer, uint32_t BUFFERSIZE){
-  // Setup communication
-  USART_Config(baudrate, aideckRxBuffer, BUFFERSIZE);
-  DMA_ITConfig(USARTx_RX_DMA_STREAM, DMA_IT_TC, ENABLE);
-  // Enable DMA USART RX Stream
-  DMA_Cmd(USARTx_RX_DMA_STREAM, ENABLE);
-  // Enable USART DMA RX Requests
-  USART_DMACmd(USARTx, USART_DMAReq_Rx, ENABLE);
-  // Clear DMA Transfer Complete Flags
-  DMA_ClearFlag(USARTx_RX_DMA_STREAM, USARTx_RX_DMA_FLAG_TCIF);
-  // Clear USART Transfer Complete Flags
-  USART_ClearFlag(USARTx, USART_FLAG_TC);
-
-  DMA_ClearFlag(USARTx_RX_DMA_STREAM, UART3_RX_DMA_ALL_FLAGS);
-  NVIC_EnableIRQ(DMA1_Stream1_IRQn);
-}
+//void __attribute__((used)) DMA1_Stream1_IRQHandler(void){
+//  DMA_ClearFlag(DMA1_Stream1, UART3_RX_DMA_ALL_FLAGS);
+//  dma_flag = 1;
+//}
+//
+//void USART_DMA_Start(uint32_t baudrate, u_t *aideckRxBuffer, uint32_t BUFFERSIZE){
+//  // Setup communication
+//  USART_Config(baudrate, aideckRxBuffer, BUFFERSIZE);
+//  DMA_ITConfig(USARTx_RX_DMA_STREAM, DMA_IT_TC, ENABLE);
+//  // Enable DMA USART RX Stream
+//  DMA_Cmd(USARTx_RX_DMA_STREAM, ENABLE);
+//  // Enable USART DMA RX Requests
+//  USART_DMACmd(USARTx, USART_DMAReq_Rx, ENABLE);
+//  // Clear DMA Transfer Complete Flags
+//  DMA_ClearFlag(USARTx_RX_DMA_STREAM, USARTx_RX_DMA_FLAG_TCIF);
+//  // Clear USART Transfer Complete Flags
+//  USART_ClearFlag(USARTx, USART_FLAG_TC);
+//
+//  DMA_ClearFlag(USARTx_RX_DMA_STREAM, UART3_RX_DMA_ALL_FLAGS);
+//  NVIC_EnableIRQ(DMA1_Stream1_IRQn);
+//}
 #endif // #ifdef AI_CBF
 
 LOG_GROUP_START(controller)
