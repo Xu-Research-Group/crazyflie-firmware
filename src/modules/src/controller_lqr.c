@@ -26,7 +26,7 @@
 #endif
 
 #ifdef AI_CBF
-#include "deck.h"
+#include "uart1.h"
 u_t aideckRxBuffer;
 volatile uint8_t dma_flag = 0;
 #endif
