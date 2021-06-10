@@ -38,7 +38,6 @@
 #include "FreeRTOS.h"
 #include "task.h"
 #include "queue.h"
-#include <string.h>
 #include <stdlib.h>
 #include <math.h>
 #include "log.h"
@@ -47,12 +46,18 @@
 #include "uart1.h"
 #include "uart2.h"
 
-#include "controller_lqr.h"
+#include "aideck.h"
+#include "stabilizer_types.h" // FIXME
 
-static bool isInit = false;
-static char byte;
-static char rx_buffer[40];
+//FIXME
+#define DEG2RAD      (float)((float)M_PI/180.0f)
+
 static u_t u;
+static CBFPacket pk_rx; // Packet for receiving via UART
+static CBFPacket pk_tx; // Packet to send via UART
+static cbf_qp_data_comp_t data_comp; // Compressed CBF-QP Data
+static bool isInit = false;
+static char byte; // char buffer for RX
 
 //Uncomment when NINA printout read is desired from console
 //#define DEBUG_NINA_PRINT
@@ -84,74 +89,77 @@ static void NinaTask(void *param)
 }
 #endif
 
-static void update_u(u_t *u, char *buff){
-    const char s[2] = ",";
-    char *token;
-
-    token = strtok(buff, s); // Get the first token
-    DEBUG_PRINT("token = %s\n",token);
-
-    while(token != NULL){
-        DEBUG_PRINT("%s\n",token);
-        token = strtok(NULL,s);
-    }
-
+// Update the u struct from received data
+static void unpack(void){
+  pk_rx.header = 0;
+  for(int i=0; i<sizeof(u_t); i++){
+    ((uint8_t*)&u)[i] = pk_rx.data[i];
+    pk_rx.data[i] = '\0'; // Empty packet
+  }
 }
 
-static void Gap8Task(void *param)
-{
-    systemWaitStart();
-    vTaskDelay(M2T(1000));
+// Receive a full CBFPacket via UART
+// return 0 if healthy pk, 1 otherwise
+static int receive_pk(void){
+  uart1Getchar(&byte); // Receive byte
+  pk_rx.header = byte; // Update header
+  int unhealthy = (byte!='V'); // Is it healthy?
+  if(unhealthy) return unhealthy;
+  // Receive rest of the packet if healthy
+  for(int i=0; i<MAX_CBFPACKET_DATA_SIZE; i++){
+    uart1Getchar(&byte); // Receive byte
+    pk_rx.data[i] = byte;
+  }
+  unpack(); // Unpack the CBFPacket
+  return unhealthy;
+}
 
-    // Pull the reset button to get a clean read out of the data
-    pinMode(DECK_GPIO_IO4, OUTPUT);
-    digitalWrite(DECK_GPIO_IO4, LOW);
-    vTaskDelay(10);
-    digitalWrite(DECK_GPIO_IO4, HIGH);
-    pinMode(DECK_GPIO_IO4, INPUT_PULLUP);
 
-    // Read out the byte the Gap8 sends and immediately send it to the console.
-    int i = 0;
-    while (1)
-    {
-        uart1Getchar(&byte);
-        rx_buffer[i] = byte; // Populate buffer
-        DEBUG_PRINT("buff[i] = %c\n",rx_buffer[i]);
-        DEBUG_PRINT("buff = %s\n",rx_buffer);
-        DEBUG_PRINT("byte = %c\n",byte);
-        i++; // Increment
-        if(byte == '\n'){
-            update_u(&u, rx_buffer);
-            DEBUG_PRINT("u.T = %.4f\n",(double)u.T);
-            i = 0; // Reset counter
-        }
-        //uart1GetDataWithDefaultTimeout(&byte);
-        //DEBUG_PRINT("Received byte: %c\n",byte);
+// AI Deck task to listen for UART traffic from the AI Deck
+static void Gap8Task(void *param) {
+  systemWaitStart();
+  vTaskDelay(M2T(1000));
+
+  // Pull the reset button to get a clean read out of the data
+  pinMode(DECK_GPIO_IO4, OUTPUT);
+  digitalWrite(DECK_GPIO_IO4, LOW);
+  vTaskDelay(10);
+  digitalWrite(DECK_GPIO_IO4, HIGH);
+  pinMode(DECK_GPIO_IO4, INPUT_PULLUP);
+
+  // Receive data in a loop
+  while (1){
+    if (receive_pk()){ // Flush RX after unhealthy packet
+      pinMode(DECK_GPIO_IO4, OUTPUT); // TODO Is this needed?
+      digitalWrite(DECK_GPIO_IO4, LOW);
+      vTaskDelay(10);
+      digitalWrite(DECK_GPIO_IO4, HIGH);
+      pinMode(DECK_GPIO_IO4, INPUT_PULLUP);
     }
+  }
 }
 
 static void aideckInit(DeckInfo *info)
 {
 
-    if (isInit)
-        return;
+  if (isInit)
+      return;
 
-    // Intialize the UART for the GAP8
-    uart1Init(115200);
-    // Initialize task for the GAP8
-    xTaskCreate(Gap8Task, AI_DECK_GAP_TASK_NAME, AI_DECK_TASK_STACKSIZE, NULL,
-                AI_DECK_TASK_PRI, NULL);
+  // Intialize the UART for the GAP8
+  uart1Init(115200);
+  // Initialize task for the GAP8
+  xTaskCreate(Gap8Task, AI_DECK_GAP_TASK_NAME, AI_DECK_TASK_STACKSIZE, NULL,
+              AI_DECK_TASK_PRI, NULL);
 
 #ifdef DEBUG_NINA_PRINT
-    // Initialize the UART for the NINA
-    uart2Init(115200);
-    // Initialize task for the NINA
-    xTaskCreate(NinaTask, AI_DECK_NINA_TASK_NAME, AI_DECK_TASK_STACKSIZE, NULL,
+  // Initialize the UART for the NINA
+  uart2Init(115200);
+  // Initialize task for the NINA
+  xTaskCreate(NinaTask, AI_DECK_NINA_TASK_NAME, AI_DECK_TASK_STACKSIZE, NULL,
                 AI_DECK_TASK_PRI, NULL);
-
 #endif
 
-    isInit = true;
+  isInit = true;
 }
 
 static bool aideckTest()
@@ -159,6 +167,49 @@ static bool aideckTest()
 
     return true;
 }
+
+// Send the CBF-QP Parametric data via UART1
+void aideck_send_cbf_data(const cbf_qp_data_t *data){
+  // Compress data
+  data_comp.phi = (int16_t)(data->phi*1000.0f);
+  data_comp.theta = (int16_t)(data->theta*1000.0f);
+  data_comp.u.T = (int16_t)(data->u.T*1000.0f);
+  data_comp.u.p = (int16_t)(data->u.p*1000.0f);
+  data_comp.u.q = (int16_t)(data->u.q*1000.0f);
+  data_comp.u.r = (int16_t)(data->u.r*1000.0f);
+  // Pack data
+  cbf_pack(sizeof(cbf_qp_data_comp_t), (uint8_t *)&data_comp);
+  // Send packet
+  uart1SendData(sizeof(CBFPacket), (void *)pk_tx.raw);
+}
+
+// Pack data into CBFPacket pk_tx
+CBFPacket *cbf_pack(const uint8_t size, uint8_t *data){
+  // Check data size
+  if (size > MAX_CBFPACKET_DATA_SIZE){
+    pk_tx.header = 0;
+    return NULL;
+  }
+  // Populate header with 'V' char
+  pk_tx.header = 'V'; // 86. 0x56, 0b01010110
+  // Fill data
+  for(int i=0; i<MAX_CBFPACKET_DATA_SIZE; i++){
+    if (i<size)
+      pk_tx.data[i] = data[i];
+    else
+      pk_tx.data[i] = '\0';
+  }
+  return &pk_tx;
+}
+
+// Give controller the CBF-QP Solution
+void aideck_get_safe_u(float *T, attitude_t *att){
+  *T = u.T;
+  att->roll = u.p;
+  att->pitch = u.q;
+  att->yaw = u.r;
+}
+
 
 static const DeckDriver aideck_deck = {
     .vid = 0xBC,

@@ -30,18 +30,6 @@
 #include "stabilizer_types.h"
 
 
-#ifdef AI_CBF
-/** Control Input to be received via UART from AI Deck */
-typedef struct u_s{
-  float T; // Normalized thrust [m/s^2]
-  float p; // Angular velocities [rad/s]
-  float q;
-  float r;
-} u_t;
-
-void USART_DMA_Start(uint32_t baudrate, u_t *aideckRxBuffer, uint32_t BUFFERSIZE);
-#endif // #ifdef AI_CBF
-
 void controllerLqrInit(void);
 bool controllerLqrTest(void);
 void controllerLqr(control_t *control, setpoint_t *setpoint,

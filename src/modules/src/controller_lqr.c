@@ -26,9 +26,7 @@
 #endif
 
 #ifdef AI_CBF
-//#include "uart1.h"
-//u_t aideckRxBuffer;
-//volatile uint8_t dma_flag = 0;
+#include "aideck.h"
 #endif
 
 #define ATTITUDE_UPDATE_DT    (float)(1.0f/ATTITUDE_RATE)
@@ -55,12 +53,16 @@ static float r_pitch;
 static float r_yaw;
 static bool flying = false;
 
+#ifdef AI_CBF
+static cbf_qp_data_t cbf_qp_data;
+#endif
+
 // Logging parameters
+static float pid_T;
 static float u_T;
 static float u_p;
 static float u_q;
 static float u_r;
-static float pid_T;
 
 // Private function: Takes normalized thrust (m/s^2) and returns pwm units
 static int to_pwm(float T){
@@ -102,11 +104,6 @@ void controllerLqrInit(void)
 
   // Initialize attitude rate controller
   attitudeControllerInit(ATTITUDE_UPDATE_DT);
-
-  #ifdef AI_CBF
-//  // Initialize DMA for AI Deck Receiving of u
-//  USART_DMA_Start(115200, &aideckRxBuffer, sizeof(u_t));
-  #endif
 
 }
 
@@ -179,7 +176,6 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     u_q = rateDesired.pitch;
     u_r = rateDesired.yaw;
 
-    // Apply CBF if enabled TODO: add CBF flag besides OSQP flag
     #ifdef OSQP_ENABLED
 	if(flying){
       apply_cbf(state,10.0f, (float)EPSILON_CBF*DEG2RAD);
@@ -187,12 +183,17 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     #endif
 
     #ifdef AI_CBF
-//    // Apply AI Deck CBF-QP TODO
-//    if(dma_flag==1){
-//        dma_flag = 0; // Clear the flag
-//        DEBUG_PRINT("CBFQP: u[0] = %.4f\n",(double)aideckRxBuffer.T);
-//        memset(&aideckRxBuffer, 0, sizeof(u_t));
-//    }
+    // Populate cbf_qp_data
+    cbf_qp_data.phi = state->attitude.roll*DEG2RAD;
+    cbf_qp_data.theta = -state->attitude.pitch*DEG2RAD;
+    cbf_qp_data.u.T = actuatorThrust;
+    cbf_qp_data.u.p = rateDesired.roll;
+    cbf_qp_data.u.p = rateDesired.pitch;
+    cbf_qp_data.u.p = rateDesired.yaw;
+    // Send to AI Deck
+    aideck_send_cbf_data(&cbf_qp_data);
+    // Get the most recent safe control received from AI Deck
+    aideck_get_safe_u(&actuatorThrust, &rateDesired);
     #endif
 
     // Saturate thrust and pqr
@@ -317,30 +318,6 @@ int apply_cbf(const state_t *state, const float k, const float epsilon){
 #endif // #ifdef OSQP_ENABLED
 
 
-
-#ifdef AI_CBF
-//void __attribute__((used)) DMA1_Stream1_IRQHandler(void){
-//  DMA_ClearFlag(DMA1_Stream1, UART3_RX_DMA_ALL_FLAGS);
-//  dma_flag = 1;
-//}
-//
-//void USART_DMA_Start(uint32_t baudrate, u_t *aideckRxBuffer, uint32_t BUFFERSIZE){
-//  // Setup communication
-//  USART_Config(baudrate, aideckRxBuffer, BUFFERSIZE);
-//  DMA_ITConfig(USARTx_RX_DMA_STREAM, DMA_IT_TC, ENABLE);
-//  // Enable DMA USART RX Stream
-//  DMA_Cmd(USARTx_RX_DMA_STREAM, ENABLE);
-//  // Enable USART DMA RX Requests
-//  USART_DMACmd(USARTx, USART_DMAReq_Rx, ENABLE);
-//  // Clear DMA Transfer Complete Flags
-//  DMA_ClearFlag(USARTx_RX_DMA_STREAM, USARTx_RX_DMA_FLAG_TCIF);
-//  // Clear USART Transfer Complete Flags
-//  USART_ClearFlag(USARTx, USART_FLAG_TC);
-//
-//  DMA_ClearFlag(USARTx_RX_DMA_STREAM, UART3_RX_DMA_ALL_FLAGS);
-//  NVIC_EnableIRQ(DMA1_Stream1_IRQn);
-//}
-#endif // #ifdef AI_CBF
 
 LOG_GROUP_START(controller)
 LOG_ADD(LOG_FLOAT, cmd_thrust, &cmd_thrust)
