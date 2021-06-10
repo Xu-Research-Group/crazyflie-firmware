@@ -170,12 +170,6 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     pid_T = pidUpdate(&pidT, state->position.z, true);
     actuatorThrust += pid_T;
 
-    // Parameter logging
-    u_T = actuatorThrust;
-    u_p = rateDesired.roll;
-    u_q = rateDesired.pitch;
-    u_r = rateDesired.yaw;
-
     #ifdef OSQP_ENABLED
 	if(flying){
       apply_cbf(state,10.0f, (float)EPSILON_CBF*DEG2RAD);
@@ -188,13 +182,14 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     cbf_qp_data.theta = -state->attitude.pitch*DEG2RAD;
     cbf_qp_data.u.T = actuatorThrust;
     cbf_qp_data.u.p = rateDesired.roll;
-    cbf_qp_data.u.p = rateDesired.pitch;
-    cbf_qp_data.u.p = rateDesired.yaw;
+    cbf_qp_data.u.q = rateDesired.pitch;
+    cbf_qp_data.u.r = rateDesired.yaw;
     // Send to AI Deck
     aideck_send_cbf_data(&cbf_qp_data);
     // Get the most recent safe control received from AI Deck
     aideck_get_safe_u(&actuatorThrust, &rateDesired);
     #endif
+
 
     // Saturate thrust and pqr
     actuatorThrust = fmaxf(fminf(actuatorThrust,18), 2);
@@ -202,9 +197,14 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
     rateDesired.pitch = fmaxf(fminf(rateDesired.pitch,6),-6);
     rateDesired.yaw = fmaxf(fminf(rateDesired.yaw,6),-6);
 
+    // Parameter logging
+    u_T = actuatorThrust*flying;
+    u_p = rateDesired.roll;
+    u_q = rateDesired.pitch;
+    u_r = rateDesired.yaw;
+
     // convert [T, p, q, r] to 0xFFFF and deg/s
     actuatorThrust = to_pwm(actuatorThrust);
-    //actuatorThrust = 19549.0f*sqrtf(actuatorThrust) - 15159.0f; // Convert to PWM units
     rateDesired.roll = rateDesired.roll*RAD2DEG;
     rateDesired.pitch = rateDesired.pitch*RAD2DEG;
     rateDesired.yaw = rateDesired.yaw*RAD2DEG;

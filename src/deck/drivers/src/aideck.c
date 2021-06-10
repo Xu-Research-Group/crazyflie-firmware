@@ -55,6 +55,8 @@ static CBFPacket pk_tx; // Packet to send via UART
 static cbf_qp_data_comp_t data_comp; // Compressed CBF-QP Data
 static bool isInit = false;
 static char byte; // char buffer for RX
+static uint8_t aideck_ready_flag; // Set to 1 whenever a CBFPacket is received via UART
+static uint8_t missed_cycles; // Keeps track of the number of cbf_qp_data that have been discarded
 
 //Uncomment when NINA printout read is desired from console
 //#define DEBUG_NINA_PRINT
@@ -86,6 +88,25 @@ static void NinaTask(void *param)
 }
 #endif
 
+// Update u with a stop command in case of error
+static void force_stop_u(void){
+  u.T = 0;
+  u.p = 0;
+  u.q = 0;
+  u.r = 0;
+}
+
+#ifdef AI_CBF_DEBUG
+// DEBUG PRINT the u_t struct
+static void print_u(void){
+  DEBUG_PRINT("u.T = %.4f\n",(double)u.T);
+  DEBUG_PRINT("u.p = %.4f\n",(double)u.p);
+  DEBUG_PRINT("u.q = %.4f\n",(double)u.q);
+  DEBUG_PRINT("u.r = %.4f\n",(double)u.r);
+  DEBUG_PRINT("Missed Cycles = %d\n", missed_cycles);
+}
+#endif
+
 // Update the u struct from received data
 static void unpack(void){
   pk_rx.header = 0;
@@ -108,6 +129,7 @@ static int receive_pk(void){
     pk_rx.data[i] = byte;
   }
   unpack(); // Unpack the CBFPacket
+  aideck_ready_flag = 1; // AI Deck is ready for more data
   return unhealthy;
 }
 
@@ -132,7 +154,12 @@ static void Gap8Task(void *param) {
       vTaskDelay(10);
       digitalWrite(DECK_GPIO_IO4, HIGH);
       pinMode(DECK_GPIO_IO4, INPUT_PULLUP);
+//      aideck_ready_flag = 1; // AI Deck is ready for more data
     }
+#ifdef AI_CBF_DEBUG
+    else
+      print_u();
+#endif
   }
 }
 
@@ -147,6 +174,8 @@ static void aideckInit(DeckInfo *info)
   // Initialize task for the GAP8
   xTaskCreate(Gap8Task, AI_DECK_GAP_TASK_NAME, AI_DECK_TASK_STACKSIZE, NULL,
               AI_DECK_TASK_PRI, NULL);
+  // The AI Deck is ready for UART Data
+  aideck_ready_flag = 1;
 
 #ifdef DEBUG_NINA_PRINT
   // Initialize the UART for the NINA
@@ -167,17 +196,32 @@ static bool aideckTest()
 
 // Send the CBF-QP Parametric data via UART1
 void aideck_send_cbf_data(const cbf_qp_data_t *data){
-  // Compress data
-  data_comp.phi = (int16_t)(data->phi*1000.0f);
-  data_comp.theta = (int16_t)(data->theta*1000.0f);
-  data_comp.u.T = (int16_t)(data->u.T*1000.0f);
-  data_comp.u.p = (int16_t)(data->u.p*1000.0f);
-  data_comp.u.q = (int16_t)(data->u.q*1000.0f);
-  data_comp.u.r = (int16_t)(data->u.r*1000.0f);
-  // Pack data
-  cbf_pack(sizeof(cbf_qp_data_comp_t), (uint8_t *)&data_comp);
-  // Send packet
-  uart1SendData(sizeof(CBFPacket), (void *)pk_tx.raw);
+  if(aideck_ready_flag){ // Is the AI Deck ready to receive data?
+    // Compress data
+    data_comp.phi = (int16_t)(data->phi*1000.0f);
+    data_comp.theta = (int16_t)(data->theta*1000.0f);
+    data_comp.u.T = (int16_t)(data->u.T*1000.0f);
+    data_comp.u.p = (int16_t)(data->u.p*1000.0f);
+    data_comp.u.q = (int16_t)(data->u.q*1000.0f);
+    data_comp.u.r = (int16_t)(data->u.r*1000.0f);
+    // Pack data
+    cbf_pack(sizeof(cbf_qp_data_comp_t), (uint8_t *)&data_comp);
+    // Send packet
+    uart1SendData(sizeof(CBFPacket), (void *)pk_tx.raw);
+    // AI Deck is processing the data
+    aideck_ready_flag = 0;
+    missed_cycles = 0; // Reset cycles
+  }
+  else{
+    missed_cycles++; // Missed this cycle
+#ifdef AI_CBF_DEBUG
+    //DEBUG_PRINT("Missed Cycles = %d\n",missed_cycles);
+#endif
+    if(missed_cycles > 200){ // Don't miss more than X cycles
+      force_stop_u();
+      aideck_ready_flag = 1; // Force ready
+    }
+  }
 }
 
 // Pack data into CBFPacket pk_tx
@@ -188,7 +232,7 @@ CBFPacket *cbf_pack(const uint8_t size, uint8_t *data){
     return NULL;
   }
   // Populate header with 'V' char
-  pk_tx.header = 'V'; // 86. 0x56, 0b01010110
+  pk_tx.header = 'V'; // 86. 0x56
   // Fill data
   for(int i=0; i<MAX_CBFPACKET_DATA_SIZE; i++){
     if (i<size)

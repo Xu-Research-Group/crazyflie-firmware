@@ -16,12 +16,12 @@
 /**
  * UART Packet structure (MAX_CBF_PACKET_DATA_SIZE+1)Bytes
  * Header:
- * 'V' = healthy packet
- * 'X' = stop packet
+ * 'ARC' = healthy packet
+ * 'LAB' = stop packet
  */
 typedef union{
   struct{
-    uint8_t header;
+    uint8_t header; // 'V' or 'X'
     uint8_t data[MAX_CBFPACKET_DATA_SIZE];
   };
   uint8_t raw[MAX_CBFPACKET_DATA_SIZE+1];
