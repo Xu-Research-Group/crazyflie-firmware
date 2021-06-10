@@ -47,10 +47,7 @@
 #include "uart2.h"
 
 #include "aideck.h"
-#include "stabilizer_types.h" // FIXME
-
-//FIXME
-#define DEG2RAD      (float)((float)M_PI/180.0f)
+#include "stabilizer_types.h"
 
 static u_t u;
 static CBFPacket pk_rx; // Packet for receiving via UART
