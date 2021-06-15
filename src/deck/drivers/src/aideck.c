@@ -49,14 +49,16 @@
 #include "aideck.h"
 #include "stabilizer_types.h"
 
+#ifdef AI_CBF
 static u_t u;
 static CBFPacket pk_rx; // Packet for receiving via UART
 static CBFPacket pk_tx; // Packet to send via UART
-static cbf_qp_data_comp_t data_comp; // Compressed CBF-QP Data
-static bool isInit = false;
-static char byte; // char buffer for RX
 static uint8_t aideck_ready_flag; // Set to 1 whenever a CBFPacket is received via UART
 static uint8_t missed_cycles; // Keeps track of the number of cbf_qp_data that have been discarded
+static cbf_qp_data_comp_t data_comp; // Compressed CBF-QP Data
+#endif
+static bool isInit = false;
+static char byte; // char buffer for RX
 
 //Uncomment when NINA printout read is desired from console
 //#define DEBUG_NINA_PRINT
@@ -88,6 +90,7 @@ static void NinaTask(void *param)
 }
 #endif
 
+#ifdef AI_CBF
 // Update u with a stop command in case of error
 static void force_stop_u(void){
   u.T = 0;
@@ -95,6 +98,7 @@ static void force_stop_u(void){
   u.q = 0;
   u.r = 0;
 }
+#endif
 
 #ifdef AI_CBF_DEBUG
 // DEBUG PRINT the u_t struct
@@ -107,6 +111,7 @@ static void print_u(void){
 }
 #endif
 
+#ifdef AI_CBF
 // Update the u struct from received data
 static void unpack(void){
   pk_rx.header = 0;
@@ -115,7 +120,9 @@ static void unpack(void){
     pk_rx.data[i] = '\0'; // Empty packet
   }
 }
+#endif
 
+#ifdef AI_CBF
 // Receive a full CBFPacket via UART
 // return 0 if healthy pk, 1 otherwise
 static int receive_pk(void){
@@ -132,6 +139,7 @@ static int receive_pk(void){
   aideck_ready_flag = 1; // AI Deck is ready for more data
   return unhealthy;
 }
+#endif
 
 
 // AI Deck task to listen for UART traffic from the AI Deck
@@ -148,14 +156,17 @@ static void Gap8Task(void *param) {
 
   // Receive data in a loop
   while (1){
+#ifdef AI_CBF
     if (receive_pk()){ // Flush RX after unhealthy packet
       pinMode(DECK_GPIO_IO4, OUTPUT); // TODO Is this needed?
       digitalWrite(DECK_GPIO_IO4, LOW);
       vTaskDelay(10);
       digitalWrite(DECK_GPIO_IO4, HIGH);
       pinMode(DECK_GPIO_IO4, INPUT_PULLUP);
-//      aideck_ready_flag = 1; // AI Deck is ready for more data
     }
+#else
+    vTaskDelay(M2T(1000));
+#endif
 #ifdef AI_CBF_DEBUG
     else
       print_u();
@@ -174,8 +185,11 @@ static void aideckInit(DeckInfo *info)
   // Initialize task for the GAP8
   xTaskCreate(Gap8Task, AI_DECK_GAP_TASK_NAME, AI_DECK_TASK_STACKSIZE, NULL,
               AI_DECK_TASK_PRI, NULL);
+
+#ifdef AI_CBF
   // The AI Deck is ready for UART Data
   aideck_ready_flag = 1;
+#endif
 
 #ifdef DEBUG_NINA_PRINT
   // Initialize the UART for the NINA
@@ -194,6 +208,7 @@ static bool aideckTest()
     return true;
 }
 
+#ifdef AI_CBF
 // Send the CBF-QP Parametric data via UART1
 void aideck_send_cbf_data(const cbf_qp_data_t *data){
   if(aideck_ready_flag){ // Is the AI Deck ready to receive data?
@@ -223,7 +238,9 @@ void aideck_send_cbf_data(const cbf_qp_data_t *data){
     }
   }
 }
+#endif
 
+#ifdef AI_CBF
 // Pack data into CBFPacket pk_tx
 CBFPacket *cbf_pack(const uint8_t size, uint8_t *data){
   // Check data size
@@ -242,7 +259,9 @@ CBFPacket *cbf_pack(const uint8_t size, uint8_t *data){
   }
   return &pk_tx;
 }
+#endif
 
+#ifdef AI_CBF
 // Give controller the CBF-QP Solution
 void aideck_get_safe_u(float *T, attitude_t *att){
   *T = u.T;
@@ -250,6 +269,7 @@ void aideck_get_safe_u(float *T, attitude_t *att){
   att->pitch = u.q;
   att->yaw = u.r;
 }
+#endif
 
 
 static const DeckDriver aideck_deck = {
