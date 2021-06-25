@@ -29,6 +29,9 @@
 #include "aideck.h"
 #endif
 
+#ifndef CF_MASS
+#define CF_MASS            0.032f
+#endif
 #define ATTITUDE_UPDATE_DT    (float)(1.0f/ATTITUDE_RATE)
 #define Z_PID_UPDATE_DT    (float)(1.0f/POSITION_RATE)
 #define PID_Z_KI           1.0f
