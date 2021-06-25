@@ -319,21 +319,10 @@ int apply_cbf(const state_t *state, const float k, const float epsilon){
 
 
 
-LOG_GROUP_START(controller)
-LOG_ADD(LOG_FLOAT, cmd_thrust, &cmd_thrust)
-LOG_ADD(LOG_FLOAT, cmd_roll, &cmd_roll)
-LOG_ADD(LOG_FLOAT, cmd_pitch, &cmd_pitch)
-LOG_ADD(LOG_FLOAT, cmd_yaw, &cmd_yaw)
-LOG_ADD(LOG_FLOAT, r_roll, &r_roll)
-LOG_ADD(LOG_FLOAT, r_pitch, &r_pitch)
-LOG_ADD(LOG_FLOAT, r_yaw, &r_yaw)
+LOG_GROUP_START(controller_lqr)
 LOG_ADD(LOG_FLOAT, u_T, &u_T)
 LOG_ADD(LOG_FLOAT, u_p, &u_p)
 LOG_ADD(LOG_FLOAT, u_q, &u_q)
 LOG_ADD(LOG_FLOAT, u_r, &u_r)
 LOG_ADD(LOG_FLOAT, pid_T, &pid_T)
-LOG_ADD(LOG_FLOAT, actuatorThrust, &actuatorThrust)
-LOG_ADD(LOG_FLOAT, rollRate,  &rateDesired.roll)
-LOG_ADD(LOG_FLOAT, pitchRate, &rateDesired.pitch)
-LOG_ADD(LOG_FLOAT, yawRate,   &rateDesired.yaw)
-LOG_GROUP_STOP(controller)
+LOG_GROUP_STOP(controller_lqr)
