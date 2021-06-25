@@ -286,6 +286,9 @@ static const DeckDriver aideck_deck = {
 
 LOG_GROUP_START(aideck)
 LOG_ADD(LOG_UINT8, receivebyte, &byte)
+#ifdef AI_CBF
+LOG_ADD(LOG_UINT8, missed_cycles, &missed_cycles)
+#endif
 LOG_GROUP_STOP(aideck)
 
 /** @addtogroup deck
