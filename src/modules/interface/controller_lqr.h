@@ -29,6 +29,12 @@
 
 #include "stabilizer_types.h"
 
+// Mode for the LQR
+typedef enum {
+  D9LQR,  // 9-Dim model u = [T p q r]
+  D6LQR,  // 6-Dim model u = [T phi theta psi]
+} lqr_mode_t;
+
 
 void controllerLqrInit(void);
 bool controllerLqrTest(void);

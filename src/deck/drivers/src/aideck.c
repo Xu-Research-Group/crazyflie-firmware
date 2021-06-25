@@ -263,11 +263,11 @@ CBFPacket *cbf_pack(const uint8_t size, uint8_t *data){
 
 #ifdef AI_CBF
 // Give controller the CBF-QP Solution
-void aideck_get_safe_u(float *T, attitude_t *att){
-  *T = u.T;
-  att->roll = u.p;
-  att->pitch = u.q;
-  att->yaw = u.r;
+void aideck_get_safe_u(float u[4]){
+  u[0] = u.T;
+  u[1] = u.p;
+  u[2] = u.q;
+  u[3] = u.r;
 }
 #endif
 

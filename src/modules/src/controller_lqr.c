@@ -39,22 +39,17 @@
 #define DEG2RAD               (float)M_PI/180.0f
 #define RAD2DEG               180.0f/(float)M_PI
 
-static bool tiltCompensationEnabled = false;
 
-static attitude_t rateDesired;
+//static lqr_mode_t mode = D9LQR; // Default mode
+
 static state_t err;
+static attitude_t rateDesired;
+static float u[4]; // Control input
 static float actuatorThrust;
-static float K[4][9]; // Kalman Gain
+static float KD9[4][9]; // Kalman Gain (9D)
+static float KD6[4][6]; // Kalman Gain (6D)
 PidObject pidT; // PID object for altitude (integral)
-
-static float cmd_thrust;
-static float cmd_roll;
-static float cmd_pitch;
-static float cmd_yaw;
-static float r_roll;
-static float r_pitch;
-static float r_yaw;
-static bool flying = false;
+static bool flying = false; // Set thrust to 0 when false
 
 #ifdef AI_CBF
 static cbf_qp_data_t cbf_qp_data;
@@ -69,35 +64,81 @@ static float u_r;
 
 // Private function: Takes normalized thrust (m/s^2) and returns pwm units
 static int to_pwm(float T){
-    // 0 = a*(rpm)^2 -b*rpm + c - mass_in_gram
-    float a = 109e-9f;
-    float b = 210.6e-6f;
-    float c = 0.154f;
-    // RPM -> PWM conversion
-    // rpm = d*pwm + e
-    float d = 0.2685f;
-    float e = 4070.3f;
-    // Convert T to grams
-    float g = (CF_MASS*1000.0f*T)/9.81f; // Mass in grams
+  // 0 = a*(rpm)^2 -b*rpm + c - mass_in_gram
+  float a = 109e-9f;
+  float b = 210.6e-6f;
+  float c = 0.154f;
+  // RPM -> PWM conversion
+  // rpm = d*pwm + e
+  float d = 0.2685f;
+  float e = 4070.3f;
+  // Convert T to grams
+  float g = (CF_MASS*1000.0f*T)/9.81f; // Mass in grams
 
-    float r = (b+sqrtf(powf(b,2)-4*a*(c-g)))/(2*a); // Quadratic formula (+)
-    int pwm = (int) ((r-e)/d);
-    pwm -= 9000; // Offset calibration
-    return pwm;
+  float r = (b+sqrtf(powf(b,2)-4*a*(c-g)))/(2*a); // Quadratic formula (+)
+  int pwm = (int) ((r-e)/d);
+  pwm -= 9000; // Offset calibration
+  return pwm;
 }
 
-void controllerLqrInit(void)
-{
-  // Initialize Kalman gain with default Linearization
-  K[0][2] = 31.6228f;
-  K[0][8] = 12.7768f;
-  K[1][1] = -4.4732f;
-  K[1][3] = 7.6869f;
-  K[1][7] = -3.0014f;
-  K[2][0] = 4.4732f;
-  K[2][4] = 7.6869f;
-  K[2][6] = 3.0014f;
-  K[3][5] = 1.0f;
+// Private function: D9LQR Policy update
+static void lqr_D9(setpoint_t *setpoint, const state_t *state, const uint32_t tick){
+  if (RATE_DO_EXECUTE(POSITION_RATE, tick)) {
+    // Compute errors in state err = \hat{x} - x_r
+    err.position.x = state->position.x - setpoint->position.x;
+    err.position.y = state->position.y - setpoint->position.y;
+    err.position.z = state->position.z - setpoint->position.z;
+    err.attitude.roll = state->attitude.roll*DEG2RAD - setpoint->attitude.roll;
+    err.attitude.pitch = -state->attitude.pitch*DEG2RAD - setpoint->attitude.pitch;
+    err.attitude.yaw = state->attitude.yaw*DEG2RAD - setpoint->attitude.yaw;
+    err.velocity.x = state->velocity.x - setpoint->velocity.x;
+    err.velocity.y = state->velocity.y - setpoint->velocity.y;
+    err.velocity.z = state->velocity.z - setpoint->velocity.z;
+
+    // Negative state feedback: \deltau = -K*err
+    u[0] = -(KD9[0][0]*err.position.x    + KD9[0][1]*err.position.y     + KD9[0][2]*err.position.z
+           + KD9[0][3]*err.attitude.roll + KD9[0][4]*err.attitude.pitch + KD9[0][5]*err.attitude.yaw
+           + KD9[0][6]*err.velocity.x    + KD9[0][7]*err.velocity.y     + KD9[0][8]*err.velocity.z);
+    u[1] = -(KD9[1][0]*err.position.x    + KD9[1][1]*err.position.y     + KD9[1][2]*err.position.z
+           + KD9[1][3]*err.attitude.roll + KD9[1][4]*err.attitude.pitch + KD9[1][5]*err.attitude.yaw
+           + KD9[1][6]*err.velocity.x    + KD9[1][7]*err.velocity.y     + KD9[1][8]*err.velocity.z);
+    u[2] = -(KD9[2][0]*err.position.x    + KD9[2][1]*err.position.y     + KD9[2][2]*err.position.z
+           + KD9[2][3]*err.attitude.roll + KD9[2][4]*err.attitude.pitch + KD9[2][5]*err.attitude.yaw
+           + KD9[2][6]*err.velocity.x    + KD9[2][7]*err.velocity.y     + KD9[2][8]*err.velocity.z);
+    u[3] = -(KD9[3][0]*err.position.x    + KD9[3][1]*err.position.y     + KD9[3][2]*err.position.z
+           + KD9[3][3]*err.attitude.roll + KD9[3][4]*err.attitude.pitch + KD9[3][5]*err.attitude.yaw
+           + KD9[3][6]*err.velocity.x    + KD9[3][7]*err.velocity.y     + KD9[3][8]*err.velocity.z);
+
+    // Add nominal control:  u = u_r + \deltau
+    u[0] += setpoint->thrust;
+    u[1] += setpoint->attitudeRate.roll;
+    u[2] += setpoint->attitudeRate.pitch;
+    u[3] += setpoint->attitudeRate.yaw;
+  } // if RATE_DO_EXECUTE
+
+} // lqr_d9()
+
+
+
+void controllerLqrInit(void){
+  // Initialize 9-Dim Kalman gain with default Linearization
+  KD9[0][2] = 31.6228f;
+  KD9[0][8] = 12.7768f;
+  KD9[1][1] = -4.4732f;
+  KD9[1][3] = 7.6869f;
+  KD9[1][7] = -3.0014f;
+  KD9[2][0] = 4.4732f;
+  KD9[2][4] = 7.6869f;
+  KD9[2][6] = 3.0014f;
+  KD9[3][5] = 1.0f;
+
+  // Initialize 6-Dime Kalman gain with default Linearization
+  KD6[0][2] = 31.6228f;
+  KD6[0][5] =  8.5584f;
+  KD6[1][1] = -2.2361f;
+  KD6[1][4] = -0.7112f;
+  KD6[2][0] =  2.2361f;
+  KD6[2][3] =  0.7112f;
 
   // Initialize altitude pid (T)
   pidInit(&pidT, 0, 0, PID_Z_KI, 0, Z_PID_UPDATE_DT, POSITION_RATE,
@@ -120,155 +161,95 @@ bool controllerLqrTest(void)
 }
 
 
-void controllerLqr(control_t *control, setpoint_t *setpoint,
-                                         const sensorData_t *sensors,
-                                         const state_t *state,
-                                         const uint32_t tick)
-{
-  if (RATE_DO_EXECUTE(POSITION_RATE, tick)) {
-    //Run LQR and update [c, p, q, r]
-    if (setpoint->position.z > 0){
-        flying = true;
-    }
-    else
-        flying = false;
+void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t *sensors,
+                   const state_t *state, const uint32_t tick){
+  // Flying safety
+  if (setpoint->position.z > 0)
+    flying = true;
+  else
+    flying = false;
 
-    // Compute errors in state err = \hat{x} - x_r
-    err.position.x = state->position.x - setpoint->position.x;
-    err.position.y = state->position.y - setpoint->position.y;
-    err.position.z = state->position.z - setpoint->position.z;
-    err.attitude.roll = state->attitude.roll*DEG2RAD - setpoint->attitude.roll;
-    err.attitude.pitch = -state->attitude.pitch*DEG2RAD - setpoint->attitude.pitch;
-    err.attitude.yaw = state->attitude.yaw*DEG2RAD - setpoint->attitude.yaw;
-    err.velocity.x = state->velocity.x - setpoint->velocity.x;
-    err.velocity.y = state->velocity.y - setpoint->velocity.y;
-    err.velocity.z = state->velocity.z - setpoint->velocity.z;
+  // D9LQR Update
+  lqr_D9(setpoint, state, tick);
 
-    // Negative state feedback: \deltau = -K*err
-    actuatorThrust    = -(K[0][0]*err.position.x    + K[0][1]*err.position.y     + K[0][2]*err.position.z
-                        + K[0][3]*err.attitude.roll + K[0][4]*err.attitude.pitch + K[0][5]*err.attitude.yaw
-                        + K[0][6]*err.velocity.x    + K[0][7]*err.velocity.y     + K[0][8]*err.velocity.z);   // T (norm thrust)
+  // Add altitude integral action
+  pidSetDesired(&pidT, setpoint->position.z);
+  pid_T = pidUpdate(&pidT, state->position.z, true);
+  u[0] += pid_T;
 
-    rateDesired.roll  = -(K[1][0]*err.position.x    + K[1][1]*err.position.y     + K[1][2]*err.position.z
-                        + K[1][3]*err.attitude.roll + K[1][4]*err.attitude.pitch + K[1][5]*err.attitude.yaw
-                        + K[1][6]*err.velocity.x    + K[1][7]*err.velocity.y     + K[1][8]*err.velocity.z);   // p
+  // FIXME: cbf onboard?
+  #ifdef OSQP_ENABLED
+  if(flying){
+    apply_cbf(state,10.0f, (float)EPSILON_CBF*DEG2RAD);
+  }
+  #endif
 
-    rateDesired.pitch = -(K[2][0]*err.position.x    + K[2][1]*err.position.y     + K[2][2]*err.position.z
-                        + K[2][3]*err.attitude.roll + K[2][4]*err.attitude.pitch + K[2][5]*err.attitude.yaw
-                        + K[2][6]*err.velocity.x    + K[2][7]*err.velocity.y     + K[2][8]*err.velocity.z);   // q
+  // Apply AI_CBF if needed
+  #ifdef AI_CBF
+  // Populate cbf_qp_data
+  cbf_qp_data.phi = state->attitude.roll*DEG2RAD;
+  cbf_qp_data.theta = -state->attitude.pitch*DEG2RAD;
+  cbf_qp_data.u.T = u[0];
+  cbf_qp_data.u.p = u[1];
+  cbf_qp_data.u.q = u[2];
+  cbf_qp_data.u.r = u[3];
+  // Send to AI Deck
+  aideck_send_cbf_data(&cbf_qp_data);
+  // Get the most recent safe control received from AI Deck
+  aideck_get_safe_u(u);
+  #endif
 
-    rateDesired.yaw   = -(K[3][0]*err.position.x    + K[3][1]*err.position.y     + K[3][2]*err.position.z
-                        + K[3][3]*err.attitude.roll + K[3][4]*err.attitude.pitch + K[3][5]*err.attitude.yaw
-                        + K[3][6]*err.velocity.x    + K[3][7]*err.velocity.y     + K[3][8]*err.velocity.z);   // r
+  // Saturate thrust and pqr
+  u[0] = fmaxf(fminf(u[0],18.0f), 0.0f); // [0,18] m/s^2
+  u[1] = fmaxf(fminf(u[1],3.5f),-3.5f);  // +-200 deg/s
+  u[2] = fmaxf(fminf(u[2],3.5f),-3.5f);  // +-200 deg/s
+  u[3] = fmaxf(fminf(u[3],3.5f),-3.5f);  // +-200 deg/s
 
+  // Parameter logging
+  u_T = u[0];
+  u_p = u[1];
+  u_q = u[2];
+  u_r = u[3];
 
-    // Add nominal control:  u = u_r + \deltau
-    actuatorThrust += setpoint->thrust;
-    rateDesired.roll += setpoint->attitudeRate.roll;
-    rateDesired.pitch += setpoint->attitudeRate.pitch;
-    rateDesired.yaw += setpoint->attitudeRate.yaw;
+  // convert [T, p, q, r] to 0xFFFF and deg/s
+  actuatorThrust = to_pwm(u[0]);
+  rateDesired.roll = u[1]*RAD2DEG;
+  rateDesired.pitch = u[2]*RAD2DEG;
+  rateDesired.yaw = u[3]*RAD2DEG;
 
-    // Add altitude integral action
-    pidSetDesired(&pidT, setpoint->position.z);
-    pid_T = pidUpdate(&pidT, state->position.z, true);
-    actuatorThrust += pid_T;
-
-    #ifdef OSQP_ENABLED
-	if(flying){
-      apply_cbf(state,10.0f, (float)EPSILON_CBF*DEG2RAD);
-    }
-    #endif
-
-    #ifdef AI_CBF
-    // Populate cbf_qp_data
-    cbf_qp_data.phi = state->attitude.roll*DEG2RAD;
-    cbf_qp_data.theta = -state->attitude.pitch*DEG2RAD;
-    cbf_qp_data.u.T = actuatorThrust;
-    cbf_qp_data.u.p = rateDesired.roll;
-    cbf_qp_data.u.q = rateDesired.pitch;
-    cbf_qp_data.u.r = rateDesired.yaw;
-    // Send to AI Deck
-    aideck_send_cbf_data(&cbf_qp_data);
-    // Get the most recent safe control received from AI Deck
-    aideck_get_safe_u(&actuatorThrust, &rateDesired);
-    #endif
-
-
-    // Saturate thrust and pqr
-    actuatorThrust = fmaxf(fminf(actuatorThrust,18), 2);
-    rateDesired.roll = fmaxf(fminf(rateDesired.roll,6),-6);
-    rateDesired.pitch = fmaxf(fminf(rateDesired.pitch,6),-6);
-    rateDesired.yaw = fmaxf(fminf(rateDesired.yaw,6),-6);
-
-    // Parameter logging
-    u_T = actuatorThrust*flying;
-    u_p = rateDesired.roll;
-    u_q = rateDesired.pitch;
-    u_r = rateDesired.yaw;
-
-    // convert [T, p, q, r] to 0xFFFF and deg/s
-    actuatorThrust = to_pwm(actuatorThrust);
-    rateDesired.roll = rateDesired.roll*RAD2DEG;
-    rateDesired.pitch = rateDesired.pitch*RAD2DEG;
-    rateDesired.yaw = rateDesired.yaw*RAD2DEG;
-
-    // Set thrust to 0 if z_desired is 0 and we are close to target
-    if((err.position.x + err.position.y + err.position.y) < 0.075f && setpoint->position.z == 0)
-        flying = false;
-    if(!flying){
-        actuatorThrust = 0;
-    }
-
+  // Set thrust to 0 if z_desired is 0 and we are close to target
+  if((err.position.x + err.position.y + err.position.y) < 0.075f && setpoint->position.z == 0)
+      flying = false;
+  if(!flying){
+      actuatorThrust = 0;
   }
 
+  // Attitude Rate Controller 1000 Hz
   if (RATE_DO_EXECUTE(ATTITUDE_RATE, tick)) {
-    // TODO: Investigate possibility to subtract gyro drift.
+    // Attitude Rate PID update
     attitudeControllerCorrectRatePID(sensors->gyro.x, sensors->gyro.y, sensors->gyro.z,
                              rateDesired.roll, rateDesired.pitch, rateDesired.yaw);
-
-    attitudeControllerGetActuatorOutput(&control->roll,
-                                        &control->pitch,
-                                        &control->yaw);
-
-    cmd_thrust = control->thrust;
-    cmd_roll = control->roll;
-    cmd_pitch = control->pitch;
-    cmd_yaw = control->yaw;
-    r_roll = radians(sensors->gyro.x);
-    r_pitch = -radians(sensors->gyro.y);
-    r_yaw = -radians(sensors->gyro.z);
+    // Power Distribution variables update
+    attitudeControllerGetActuatorOutput(&control->roll, &control->pitch, &control->yaw);
   }
 
-  if (tiltCompensationEnabled)
-  {
-    control->thrust = actuatorThrust / sensfusion6GetInvThrustCompensationForTilt();
-  }
-  else
-  {
-    control->thrust = actuatorThrust;
-  }
+  // Power Distribution variable update
+  control->thrust = actuatorThrust;
 
+  // Safety for power distribution
   if (control->thrust == 0)
   {
-    control->thrust = 0;
     control->roll = 0;
     control->pitch = 0;
     control->yaw = 0;
-
-    cmd_thrust = control->thrust;
-    cmd_roll = control->roll;
-    cmd_pitch = control->pitch;
-    cmd_yaw = control->yaw;
-
     attitudeControllerResetAllPID();
     pidReset(&pidT); // Reset the altitude pid
-
   }
 }
 
-// Public function to update entries of K (see crtp_commander_sdlqr)
+// Public function to update entries of KD9 (see crtp_commander_sdlqr)
 void update_K_entry(const uint8_t i, const uint8_t j, float value){
-    K[i][j] = value;
+    KD9[i][j] = value;
 }
 
 #ifdef OSQP_ENABLED

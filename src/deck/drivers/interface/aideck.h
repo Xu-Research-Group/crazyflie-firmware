@@ -88,7 +88,7 @@ void aideck_send_cbf_data(const cbf_qp_data_t *data);
  * Update controller variables with most recently received
  * solution to CBF-QP
  */
-void aideck_get_safe_u(float *T, attitude_t *att);
+void aideck_get_safe_u(float u[4]);
 
 
 #endif /* _AIDECK_H_ */
