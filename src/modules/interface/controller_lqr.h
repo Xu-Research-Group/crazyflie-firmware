@@ -29,10 +29,21 @@
 
 #include "stabilizer_types.h"
 
+// Frequency of control stages
+#ifndef Z_PID_RATE
+#define Z_PID_RATE RATE_500_HZ
+#endif
+#ifndef D9LQR_RATE
+#define D9LQR_RATE RATE_100_HZ
+#endif
+#ifndef D6LQR_RATE
+#define D6LQR_RATE RATE_10_HZ
+#endif
+
 // Mode for the LQR
 typedef enum {
-  D9LQR,  // 9-Dim model u = [T p q r]
-  D6LQR,  // 6-Dim model u = [T phi theta psi]
+  D9LQR = 0,  // 9-Dim model u = [T p q r]
+  D6LQR = 1,  // 6-Dim model u = [T phi theta psi]
 } lqr_mode_t;
 
 

@@ -33,18 +33,20 @@
 #define CF_MASS            0.032f
 #endif
 #define ATTITUDE_UPDATE_DT    (float)(1.0f/ATTITUDE_RATE)
-#define Z_PID_UPDATE_DT    (float)(1.0f/POSITION_RATE)
+#define Z_PID_UPDATE_DT    (float)(1.0f/Z_PID_RATE)
 #define PID_Z_KI           1.0f
 #define Z_LPF_CUTOFF_FREQ  20.0f
 #define DEG2RAD               (float)M_PI/180.0f
 #define RAD2DEG               180.0f/(float)M_PI
 
 
-//static lqr_mode_t mode = D9LQR; // Default mode
+// The mode is a parameter that can be changed from the client-side
+static lqr_mode_t mode = D9LQR; // Default mode
 
 static state_t err;
 static attitude_t rateDesired;
-static float u[4]; // Control input
+static float u[4]; // Control input u = [T p q r]
+static float u_D6[4]; // Control input u = [T phi theta psi]
 static float actuatorThrust;
 static float KD9[4][9]; // Kalman Gain (9D)
 static float KD6[4][6]; // Kalman Gain (6D)
@@ -83,7 +85,7 @@ static int to_pwm(float T){
 
 // Private function: D9LQR Policy update
 static void lqr_D9(setpoint_t *setpoint, const state_t *state, const uint32_t tick){
-  if (RATE_DO_EXECUTE(POSITION_RATE, tick)) {
+  if (RATE_DO_EXECUTE(D9LQR_RATE, tick)) {
     // Compute errors in state err = \hat{x} - x_r
     err.position.x = state->position.x - setpoint->position.x;
     err.position.y = state->position.y - setpoint->position.y;
@@ -116,8 +118,37 @@ static void lqr_D9(setpoint_t *setpoint, const state_t *state, const uint32_t ti
     u[3] += setpoint->attitudeRate.yaw;
   } // if RATE_DO_EXECUTE
 
-} // lqr_d9()
+} // lqr_D9()
 
+// Private function: D6LQR Policy update
+static void lqr_D6(setpoint_t *setpoint, const state_t *state, const uint32_t tick){
+  if (RATE_DO_EXECUTE(D6LQR_RATE, tick)) {
+    // Compute errors in state err = \hat{x} - x_r
+    err.position.x = state->position.x - setpoint->position.x;
+    err.position.y = state->position.y - setpoint->position.y;
+    err.position.z = state->position.z - setpoint->position.z;
+    err.velocity.x = state->velocity.x - setpoint->velocity.x;
+    err.velocity.y = state->velocity.y - setpoint->velocity.y;
+    err.velocity.z = state->velocity.z - setpoint->velocity.z;
+
+    // Negative state feedback: \deltau = -K*err
+    u_D6[0] = -(KD6[0][0]*err.position.x   + KD6[0][1]*err.position.y   + KD6[0][2]*err.position.z
+              + KD6[0][3]*err.velocity.x   + KD6[0][4]*err.velocity.y   + KD6[0][5]*err.velocity.z);
+    u_D6[1] = -(KD6[1][0]*err.position.x   + KD6[1][1]*err.position.y   + KD6[1][2]*err.position.z
+              + KD6[1][3]*err.velocity.x   + KD6[1][4]*err.velocity.y   + KD6[1][5]*err.velocity.z);
+    u_D6[2] = -(KD6[2][0]*err.position.x   + KD6[2][1]*err.position.y   + KD6[2][2]*err.position.z
+              + KD6[2][3]*err.velocity.x   + KD6[2][4]*err.velocity.y   + KD6[2][5]*err.velocity.z);
+    u_D6[3] = -(KD6[3][0]*err.position.x   + KD6[3][1]*err.position.y   + KD6[3][2]*err.position.z
+              + KD6[3][3]*err.velocity.x   + KD6[3][4]*err.velocity.y   + KD6[3][5]*err.velocity.z);
+
+    // Add nominal control:  u = u_r + \deltau
+    u_D6[0] += setpoint->thrust;
+    u_D6[1] += setpoint->attitude.roll;
+    u_D6[2] += setpoint->attitude.pitch;
+    u_D6[3] += setpoint->attitude.yaw;
+  } // if RATE_DO_EXECUTE
+
+} // lqr_D6()
 
 
 void controllerLqrInit(void){
@@ -132,7 +163,7 @@ void controllerLqrInit(void){
   KD9[2][6] = 3.0014f;
   KD9[3][5] = 1.0f;
 
-  // Initialize 6-Dime Kalman gain with default Linearization
+  // Initialize 6-Dim Kalman gain with default Linearization
   KD6[0][2] = 31.6228f;
   KD6[0][5] =  8.5584f;
   KD6[1][1] = -2.2361f;
@@ -141,7 +172,7 @@ void controllerLqrInit(void){
   KD6[2][3] =  0.7112f;
 
   // Initialize altitude pid (T)
-  pidInit(&pidT, 0, 0, PID_Z_KI, 0, Z_PID_UPDATE_DT, POSITION_RATE,
+  pidInit(&pidT, 0, 0, PID_Z_KI, 0, Z_PID_UPDATE_DT, Z_PID_RATE,
            Z_LPF_CUTOFF_FREQ, false);
   pidSetIntegralLimit(&pidT, 0.5); // [m] integral limit
   pidT.outputLimit = 0.5; // [m/s^2] output limit
@@ -169,13 +200,32 @@ void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t 
   else
     flying = false;
 
-  // D9LQR Update
-  lqr_D9(setpoint, state, tick);
+  // Perform the LQR Update
+  if (mode==D9LQR)
+    lqr_D9(setpoint, state, tick); // update u
+  else if (mode==D6LQR){
+    lqr_D6(setpoint, state, tick); // update u_D6
+  }
+
+  // Perform the Attitude PID Update if needed
+  if (mode==D6LQR){ // update u
+    if (RATE_DO_EXECUTE(ATTITUDE_RATE, tick)){
+      attitudeControllerCorrectAttitudePID(state->attitude.roll, -state->attitude.pitch, state->attitude.yaw,
+                               u_D6[1]*RAD2DEG, u_D6[2]*RAD2DEG, u_D6[3]*RAD2DEG,
+                               &(u[1]), &(u[2]), &(u[3]) );
+      // Convert to rad/s
+      u[1] = u[1]*DEG2RAD;
+      u[2] = u[2]*DEG2RAD;
+      u[3] = u[3]*DEG2RAD;
+    }
+  } // If mode==D6LQR
 
   // Add altitude integral action
-  pidSetDesired(&pidT, setpoint->position.z);
-  pid_T = pidUpdate(&pidT, state->position.z, true);
-  u[0] += pid_T;
+  if(RATE_DO_EXECUTE(Z_PID_RATE, tick)){
+    pidSetDesired(&pidT, setpoint->position.z);
+    pid_T = pidUpdate(&pidT, state->position.z, true);
+    u[0] += pid_T;
+  }
 
   // FIXME: cbf onboard?
   #ifdef OSQP_ENABLED
@@ -224,7 +274,7 @@ void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t 
       actuatorThrust = 0;
   }
 
-  // Attitude Rate Controller 1000 Hz
+  // Attitude Rate Controller 500 Hz
   if (RATE_DO_EXECUTE(ATTITUDE_RATE, tick)) {
     // Attitude Rate PID update
     attitudeControllerCorrectRatePID(sensors->gyro.x, sensors->gyro.y, sensors->gyro.z,
@@ -302,7 +352,19 @@ int apply_cbf(const state_t *state, const float k, const float epsilon){
 #endif // #ifdef OSQP_ENABLED
 
 
+/**
+ * Parameters to set the LQR Controller mode (D6LQR or D9LQR)
+ */
+PARAM_GROUP_START(controller_lqr)
+/**
+ * @brief LQR Controller mode D9LQR(0), D6LQR(1), (Default: 0)
+ */
+PARAM_ADD_CORE(PARAM_UINT8, mode, &mode)
+PARAM_GROUP_STOP(controller_lqr)
 
+/**
+ * Logging variables
+ */
 LOG_GROUP_START(controller_lqr)
 LOG_ADD(LOG_FLOAT, u_T, &u_T)
 LOG_ADD(LOG_FLOAT, u_p, &u_p)
