@@ -29,18 +29,20 @@ except ImportError as e:
 src = sys.argv[1]
 
 # Define problem data
-P = sparse.csc_matrix(2*np.eye(4))
-q = np.array([1, 1, 1, 1])
-A = sparse.csc_matrix([[0, 1, 1, 1], [0, 0, 1, 1]])
-l = np.array([-np.inf, -np.inf])
-u = np.array([np.inf, np.inf])
+n = 3 # Variables
+m = 4 # Constraints
+P = sparse.csc_matrix(2*np.eye(n))
+q = np.ones(n)
+A = sparse.csc_matrix([[-1, 0, 0], [1, 0, 0], [0, -1, 0], [0, 1, 0]])
+l = -np.inf*np.ones(m)
+u = np.inf*np.ones(m)
 
 
 # Create an OSQP object
 m = osqp.OSQP()
 
 # Solver initialization
-m.setup(P, q, A, l, u, max_iter=20)
+m.setup(P, q, A, l, u)
 
 # Generate code
-m.codegen(src, force_rewrite=True, project_type='Makefile',parameters='matrices',FLOAT=True,LONG=False)
+m.codegen(src, force_rewrite=True, parameters='vectors',FLOAT=True,LONG=False)

@@ -20,7 +20,7 @@
 
 #include "crtp_commander_sdlqr.h"
 
-#ifdef OSQP_ENABLED
+#ifdef CF_CBF
 #include "osqp.h"
 #include "workspace.h"
 #endif
@@ -159,6 +159,80 @@ static void lqr_D6(setpoint_t *setpoint, const state_t *state, const uint32_t ti
 
 } // lqr_D6()
 
+#ifdef CF_CBF
+/**
+ * Private function. Solve a QP-CBF to limit position [x y]
+ * The osqp workspace is generated before compilation, see:
+ * ~/tools/make/osqp/osqp_code_gen.py
+ */
+static int apply_cbf(const state_t *state){
+  // Get vars
+  float x_ddot;
+  float y_ddot;
+  float z_ddot;
+  float T = u_D6[0];
+  float phi = u_D6[1];
+  float theta = u_D6[2];
+  float psi = u_D6[3];
+  float x = state->position.x;
+  float y = state->position.y;
+  float x_dot = state->velocity.x;
+  float y_dot = state->velocity.y;
+
+  // Virtualize inputs
+  c_float mu_nom[3];
+  mu_nom[0] = T*(arm_sin_f32(phi)*arm_sin_f32(psi) +
+            arm_cos_f32(phi)*arm_sin_f32(theta)*arm_cos_f32(psi)); // x_ddot
+  mu_nom[1] = T*(arm_cos_f32(phi)*arm_sin_f32(theta)*arm_sin_f32(psi) -
+                 arm_sin_f32(phi)*arm_cos_f32(psi)); // y_ddot
+  mu_nom[2] = T*arm_cos_f32(phi)*arm_cos_f32(theta) - 9.81f; // z_ddot
+
+  // Update Linear Cost  q
+  c_float q[3] = {-2.0*mu_nom[0], -2.0*mu_nom[1], -2.0*mu_nom[2]};
+  osqp_update_lin_cost(&workspace,q); // Update q
+
+  // Update Lower Bound
+  c_float b_lower[4];
+  b_lower[0] = -(CF_CBF_K1*(CF_CBF_X_MAX-x) + CF_CBF_K2*(-x_dot));
+  b_lower[1] = -(CF_CBF_K1*(x-CF_CBF_X_MIN) + CF_CBF_K2*x_dot);
+  b_lower[2] = -(CF_CBF_K1*(CF_CBF_Y_MAX-y) + CF_CBF_K2*(-y_dot));
+  b_lower[3] = -(CF_CBF_K1*(y-CF_CBF_Y_MIN) + CF_CBF_K2*y_dot);
+  osqp_update_lower_bound(&workspace,b_lower);
+
+#ifdef CF_CBF_MOCK
+  // Solve mock CBF-QP
+  int exitflag = 0; // Success
+  x_ddot = mu_nom[0];
+  y_ddot = mu_nom[1];
+  z_ddot = mu_nom[2];
+#else
+  // Solve CBF-QP
+  int exitflag = osqp_solve(&workspace);
+  if(exitflag){ // Errors
+    DEBUG_PRINT("OSQP Solve error %d\n",exitflag);
+    x_ddot = mu_nom[0];
+    y_ddot = mu_nom[1];
+    z_ddot = mu_nom[2];
+  }
+  else{
+    x_ddot = workspace.solution->x[0];
+    y_ddot = workspace.solution->x[1];
+    z_ddot = workspace.solution->x[2];
+  }
+#endif
+
+  // Recover inputs
+  u_D6[3] = psi; // psi
+  u_D6[2] = atan((arm_cos_f32(psi)*x_ddot + arm_sin_f32(psi)*y_ddot)/(z_ddot+9.81f)); // theta
+  u_D6[1] = atan((arm_sin_f32(psi)*x_ddot - arm_cos_f32(psi)*y_ddot)/(z_ddot+9.81f)*arm_cos_f32(u_D6[2])); // phi
+  u_D6[0] = (z_ddot+9.81f)/(arm_cos_f32(u_D6[1])*arm_cos_f32(u_D6[2])); // T
+
+  // Return
+  return exitflag;
+}
+#endif // #ifdef CF_CBF
+
+
 
 void controllerLqrInit(void){
   // Initialize 9-Dim Kalman gain with default Linearization
@@ -197,6 +271,10 @@ bool controllerLqrTest(void)
 {
   bool pass = true;
 
+#ifdef CF_CBF
+  pass &= OSQP_ENABLED; // OSQP Must be compiled to use the CF_CBF
+#endif
+
   pass &= attitudeControllerTest();
 
   return pass;
@@ -217,6 +295,15 @@ void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t 
   else if (mode==D6LQR){
     lqr_D6(setpoint, state, tick); // update u_D6
   }
+
+  // Apply CF_CBF
+#ifdef CF_CBF
+  if (mode==D6LQR){
+    if (RATE_DO_EXECUTE(D6LQR_RATE, tick))
+      apply_cbf(state);
+  }
+#endif
+
 
   // Perform the Attitude PID Update if needed
   if (mode==D6LQR){ // update u
@@ -241,15 +328,8 @@ void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t 
   }
 #endif
 
-  // FIXME: cbf onboard?
-  #ifdef OSQP_ENABLED
-  if(flying){
-    apply_cbf(state,10.0f, (float)EPSILON_CBF*DEG2RAD);
-  }
-  #endif
-
   // Apply AI_CBF if needed
-  #ifdef AI_CBF
+#ifdef AI_CBF
   // Populate cbf_qp_data
   cbf_qp_data.phi = state->attitude.roll*DEG2RAD;
   cbf_qp_data.theta = -state->attitude.pitch*DEG2RAD;
@@ -261,7 +341,7 @@ void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t 
   aideck_send_cbf_data(&cbf_qp_data);
   // Get the most recent safe control received from AI Deck
   aideck_get_safe_u(u);
-  #endif
+#endif
 
   // Saturate thrust and pqr
   u[0] = fmaxf(fminf(u[0],18.0f), 0.0f); // [0,18] m/s^2
@@ -317,55 +397,6 @@ void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t 
 void update_K_entry(const uint8_t i, const uint8_t j, float value){
     KD9[i][j] = value;
 }
-
-#ifdef OSQP_ENABLED
-// Use OSQP library to solve a QP-CBF
-// The osqp workspace is generated before compilation, see:
-// ~/tools/make/osqp/osqp_code_gen.py
-int apply_cbf(const state_t *state, const float k, const float epsilon){
-  // Convenient temp variables
-  float phi = state->attitude.roll*DEG2RAD;
-  float theta = -state->attitude.pitch*DEG2RAD; // Opposite sign pitch from estimator
-
-  // Update Linear Cost: -2*u_LQR
-  c_float q[4] = {-2.0f*actuatorThrust, -2.0f*rateDesired.roll,
-                  -2.0f*rateDesired.pitch, -2.0f*rateDesired.yaw, }; // -2*u_LQR
-  osqp_update_lin_cost(&workspace, q); // Update q
-
-  // Update Constraint matrix A (CBF)
-  float s_phi = arm_sin_f32((float)M_PI*phi/(2.0f*epsilon));
-  float s_theta = arm_sin_f32((float)M_PI*theta/(2.0f*epsilon));
-  c_float A_x[5] = {s_phi,
-                    s_phi*arm_sin_f32(phi)*arm_sin_f32(theta)/arm_cos_f32(theta),
-                    s_theta*arm_cos_f32(phi),
-                    s_phi*arm_cos_f32(phi)*arm_sin_f32(theta)/arm_cos_f32(theta),
-                      -s_theta*arm_sin_f32(phi), };
-  osqp_update_A(&workspace, A_x, OSQP_NULL, 5);
-
-  // Update constraint upper bound (CBF)
-  // Lower bound is set to -9999 (-infty desired)
-  c_float u[2] = {k*arm_cos_f32((float)M_PI*state->attitude.roll/(2.0f*epsilon)),
-                  k*arm_cos_f32((float)M_PI*-state->attitude.pitch/(2.0f*epsilon)), }; // Upper bound NOTE pitch is opposite
-  osqp_update_upper_bound(&workspace,u);
-
-  // Exitflag
-  c_int exitflag = 1; // Start the flag with error
-
-  // Solve Problem
-  exitflag = osqp_solve(&workspace); // Flag set to 0 if success
-
-  // Retrieve solution if flag is 0
-  if(!exitflag){
-    actuatorThrust = workspace.solution->x[0];
-    rateDesired.roll = workspace.solution->x[1];
-    rateDesired.pitch = workspace.solution->x[2];
-    rateDesired.yaw = workspace.solution->x[3];
-  }
-
-  // Return exitflag
-  return exitflag;
-}
-#endif // #ifdef OSQP_ENABLED
 
 
 /**

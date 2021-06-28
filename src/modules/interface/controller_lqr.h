@@ -40,6 +40,28 @@
 #define D6LQR_RATE RATE_25_HZ
 #endif
 
+// CF_CBF Parameters
+#ifdef CF_CBF
+#ifndef CF_CBF_K1
+#define CF_CBF_K1       800.0f
+#endif
+#ifndef CF_CBF_K2
+#define CF_CBF_K2       60.0f
+#endif
+#ifndef CF_CBF_X_MAX
+#define CF_CBF_X_MAX    2.0f
+#endif
+#ifndef CF_CBF_X_MIN
+#define CF_CBF_X_MIN    -2.0f
+#endif
+#ifndef CF_CBF_Y_MAX
+#define CF_CBF_Y_MAX    2.0f
+#endif
+#ifndef CF_CBF_Y_MIN
+#define CF_CBF_Y_MIN    -2.0f
+#endif
+#endif // CF_CBF
+
 // Mode for the LQR
 typedef enum {
   D9LQR = 0,  // 9-Dim model u = [T p q r]
@@ -53,9 +75,6 @@ void controllerLqr(control_t *control, setpoint_t *setpoint,
                                          const sensorData_t *sensors,
                                          const state_t *state,
                                          const uint32_t tick);
-#ifdef OSQP_ENABLED
-int apply_cbf(const state_t *state, const float k, const float epsilon);
-#endif // ifdef OSQP_ENABLED
 
 // Updates the [i][j] entry of the K matrix with value
 void update_K_entry(const uint8_t i, const uint8_t j, float value);

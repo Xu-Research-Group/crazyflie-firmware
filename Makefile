@@ -279,7 +279,7 @@ PROJ_OBJ += libarm_math.a
 ifeq ($(COMPILE_OSQP), 1)
 include $(CRAZYFLIE_BASE)/tools/make/osqp/osqp.mk
 PROJ_OBJ += $(OSQP_OBJ)
-INCLUDES += $(OSQP_INCLUDE)
+INCLUDES += -I$(OSQP_INCLUDE)
 CFLAGS += -DOSQP_ENABLED
 endif
 

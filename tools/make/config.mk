@@ -7,12 +7,13 @@
 ## Enable the AI Deck CBF-QP for controller_lqr
 #CFLAGS += -DAI_CBF
 #CFLAGS += -DAI_CBF_DEBUG
+## Enable the Firmware CBF-QP for controller_lqr
+#CFLAGS += -DCF_CBF
+## Passthrough with a Mock CBF-QP
+#CFLAGS += -DCF_CBF_MOCK
 
 # Set to 1 to add OSQP to firmware compilation
 #COMPILE_OSQP := 1
-
-# Enforce CBF?
-#CFLAGS += -DEPSILON_CBF=30.0f # in deg
 
 # Apply Integral Action to altitude control?
 #CFLAGS += -DLQR_ALT_PID
