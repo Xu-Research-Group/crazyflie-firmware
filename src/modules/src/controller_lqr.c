@@ -32,10 +32,15 @@
 #ifndef CF_MASS
 #define CF_MASS            0.032f
 #endif
+
 #define ATTITUDE_UPDATE_DT    (float)(1.0f/ATTITUDE_RATE)
+
+#ifdef LQR_ALT_PID
 #define Z_PID_UPDATE_DT    (float)(1.0f/Z_PID_RATE)
 #define PID_Z_KI           1.0f
 #define Z_LPF_CUTOFF_FREQ  20.0f
+#endif
+
 #define DEG2RAD               (float)M_PI/180.0f
 #define RAD2DEG               180.0f/(float)M_PI
 
@@ -50,7 +55,9 @@ static float u_D6[4]; // Control input u = [T phi theta psi]
 static float actuatorThrust;
 static float KD9[4][9]; // Kalman Gain (9D)
 static float KD6[4][6]; // Kalman Gain (6D)
+#ifdef LQR_ALT_PID
 PidObject pidT; // PID object for altitude (integral)
+#endif
 static bool flying = false; // Set thrust to 0 when false
 
 #ifdef AI_CBF
@@ -58,7 +65,9 @@ static cbf_qp_data_t cbf_qp_data;
 #endif
 
 // Logging parameters
+#ifdef LQR_ALT_PID
 static float pid_T;
+#endif
 static float u_T;
 static float u_p;
 static float u_q;
@@ -171,13 +180,15 @@ void controllerLqrInit(void){
   KD6[2][0] =  2.2361f;
   KD6[2][3] =  0.7112f;
 
+#ifdef LQR_ALT_PID
   // Initialize altitude pid (T)
   pidInit(&pidT, 0, 0, PID_Z_KI, 0, Z_PID_UPDATE_DT, Z_PID_RATE,
            Z_LPF_CUTOFF_FREQ, false);
   pidSetIntegralLimit(&pidT, 0.5); // [m] integral limit
   pidT.outputLimit = 0.5; // [m/s^2] output limit
+#endif
 
-  // Initialize attitude rate controller
+  // Initialize attitude controller
   attitudeControllerInit(ATTITUDE_UPDATE_DT);
 
 }
@@ -209,6 +220,7 @@ void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t 
 
   // Perform the Attitude PID Update if needed
   if (mode==D6LQR){ // update u
+    u[0] = u_D6[0]; // T is the same
     if (RATE_DO_EXECUTE(ATTITUDE_RATE, tick)){
       attitudeControllerCorrectAttitudePID(state->attitude.roll, -state->attitude.pitch, state->attitude.yaw,
                                u_D6[1]*RAD2DEG, u_D6[2]*RAD2DEG, u_D6[3]*RAD2DEG,
@@ -220,12 +232,14 @@ void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t 
     }
   } // If mode==D6LQR
 
+#ifdef LQR_ALT_PID
   // Add altitude integral action
   if(RATE_DO_EXECUTE(Z_PID_RATE, tick)){
     pidSetDesired(&pidT, setpoint->position.z);
     pid_T = pidUpdate(&pidT, state->position.z, true);
     u[0] += pid_T;
   }
+#endif
 
   // FIXME: cbf onboard?
   #ifdef OSQP_ENABLED
@@ -293,7 +307,9 @@ void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t 
     control->pitch = 0;
     control->yaw = 0;
     attitudeControllerResetAllPID();
+#ifdef LQR_ALT_PID
     pidReset(&pidT); // Reset the altitude pid
+#endif
   }
 }
 
@@ -370,5 +386,7 @@ LOG_ADD(LOG_FLOAT, u_T, &u_T)
 LOG_ADD(LOG_FLOAT, u_p, &u_p)
 LOG_ADD(LOG_FLOAT, u_q, &u_q)
 LOG_ADD(LOG_FLOAT, u_r, &u_r)
+#ifdef LQR_ALT_PID
 LOG_ADD(LOG_FLOAT, pid_T, &pid_T)
+#endif
 LOG_GROUP_STOP(controller_lqr)

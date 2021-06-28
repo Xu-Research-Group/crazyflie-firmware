@@ -37,7 +37,7 @@
 #define D9LQR_RATE RATE_100_HZ
 #endif
 #ifndef D6LQR_RATE
-#define D6LQR_RATE RATE_10_HZ
+#define D6LQR_RATE RATE_100_HZ
 #endif
 
 // Mode for the LQR

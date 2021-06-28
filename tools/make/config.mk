@@ -2,7 +2,7 @@
 
 ## Weight of the Crazyflie, including decks. The default setting is a Crazyflie 2.X without decks.
 #CFLAGS += -DCF_MASS=0.032f # in kg (MOCAP Deck)
-CFLAGS += -DCF_MASS=0.037f # in kg (AI Deck + MOCAP Deck)
+#CFLAGS += -DCF_MASS=0.037f # in kg (AI Deck + MOCAP Deck)
 
 ## Enable the AI Deck CBF-QP for controller_lqr
 #CFLAGS += -DAI_CBF
@@ -13,6 +13,9 @@ CFLAGS += -DCF_MASS=0.037f # in kg (AI Deck + MOCAP Deck)
 
 # Enforce CBF?
 #CFLAGS += -DEPSILON_CBF=30.0f # in deg
+
+# Apply Integral Action to altitude control?
+#CFLAGS += -DLQR_ALT_PID
 
 # Force a default estimator with the line below
 #ESTIMATOR=kalman
