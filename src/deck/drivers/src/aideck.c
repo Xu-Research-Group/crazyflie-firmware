@@ -49,13 +49,13 @@
 #include "aideck.h"
 #include "stabilizer_types.h"
 
-#ifdef AI_CBF
+#if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
 static u_t u;
 static CBFPacket pk_rx; // Packet for receiving via UART
 static CBFPacket pk_tx; // Packet to send via UART
 static uint8_t aideck_ready_flag; // Set to 1 whenever a CBFPacket is received via UART
-static uint8_t missed_cycles; // Keeps track of the number of cbf_qp_data that have been discarded
-static cbf_qp_data_comp_t data_comp; // Compressed CBF-QP Data
+static uint8_t missed_cycles; // Keeps track of the number of cbf_qpdata that have been discarded
+static cbf_qpdata_comp_t data_comp; // Compressed CBF-QP Data
 #endif
 static bool isInit = false;
 static char byte; // char buffer for RX
@@ -90,28 +90,40 @@ static void NinaTask(void *param)
 }
 #endif
 
-#ifdef AI_CBF
+#if defined CBF_TYPE_POS || CBF_TYPE_EUL
 // Update u with a stop command in case of error
 static void force_stop_u(void){
+#ifdef CBF_TYPE_EUL
   u.T = 0;
   u.p = 0;
   u.q = 0;
   u.r = 0;
+#elif CBF_TYPE_POS
+  u.x_ddot = 0;
+  u.y_ddot = 0;
+  u.z_ddot = 0;
+#endif
 }
 #endif
 
 #ifdef AI_CBF_DEBUG
 // DEBUG PRINT the u_t struct
 static void print_u(void){
+#ifdef CBF_TYPE_EUL
   DEBUG_PRINT("u.T = %.4f\n",(double)u.T);
   DEBUG_PRINT("u.p = %.4f\n",(double)u.p);
   DEBUG_PRINT("u.q = %.4f\n",(double)u.q);
   DEBUG_PRINT("u.r = %.4f\n",(double)u.r);
+#elif CBF_TYPE_POS
+  DEBUG_PRINT("u.x_ddot = %.4f\n",(double)u.x_ddot);
+  DEBUG_PRINT("u.y_ddot = %.4f\n",(double)u.y_ddot);
+  DEBUG_PRINT("u.z_ddot = %.4f\n",(double)u.z_ddot);
+#endif
   DEBUG_PRINT("Missed Cycles = %d\n", missed_cycles);
 }
 #endif
 
-#ifdef AI_CBF
+#if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
 // Update the u struct from received data
 static void unpack(void){
   pk_rx.header = 0;
@@ -122,7 +134,7 @@ static void unpack(void){
 }
 #endif
 
-#ifdef AI_CBF
+#if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
 // Receive a full CBFPacket via UART
 // return 0 if healthy pk, 1 otherwise
 static int receive_pk(void){
@@ -156,7 +168,7 @@ static void Gap8Task(void *param) {
 
   // Receive data in a loop
   while (1){
-#ifdef AI_CBF
+#if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
     if (receive_pk()){ // Flush RX after unhealthy packet
       pinMode(DECK_GPIO_IO4, OUTPUT); // TODO Is this needed?
       digitalWrite(DECK_GPIO_IO4, LOW);
@@ -186,7 +198,7 @@ static void aideckInit(DeckInfo *info)
   xTaskCreate(Gap8Task, AI_DECK_GAP_TASK_NAME, AI_DECK_TASK_STACKSIZE, NULL,
               AI_DECK_TASK_PRI, NULL);
 
-#ifdef AI_CBF
+#if defined CBF_TYPE_EUL || defined CBF_TYPE_POS
   // The AI Deck is ready for UART Data
   aideck_ready_flag = 1;
 #endif
@@ -208,19 +220,31 @@ static bool aideckTest()
     return true;
 }
 
-#ifdef AI_CBF
+#if defined CBF_TYPE_EUL || CBF_TYPE_POS
 // Send the CBF-QP Parametric data via UART1
-void aideck_send_cbf_data(const cbf_qp_data_t *data){
+void aideck_send_cbf_data(const cbf_qpdata_t *data){
   if(aideck_ready_flag){ // Is the AI Deck ready to receive data?
     // Compress data
+#ifdef CBF_TYPE_EUL
     data_comp.phi = (int16_t)(data->phi*1000.0f);
     data_comp.theta = (int16_t)(data->theta*1000.0f);
     data_comp.u.T = (int16_t)(data->u.T*1000.0f);
     data_comp.u.p = (int16_t)(data->u.p*1000.0f);
     data_comp.u.q = (int16_t)(data->u.q*1000.0f);
     data_comp.u.r = (int16_t)(data->u.r*1000.0f);
+#elif CBF_TYPE_POS
+    data_comp.x = (int16_t)(data->x*1000.0f);
+    data_comp.y = (int16_t)(data->y*1000.0f);
+    data_comp.z = (int16_t)(data->z*1000.0f);
+    data_comp.x_dot = (int16_t)(data->x_dot*1000.0f);
+    data_comp.y_dot = (int16_t)(data->y_dot*1000.0f);
+    data_comp.z_dot = (int16_t)(data->z_dot*1000.0f);
+    data_comp.u.x_ddot = (int16_t)(data->u.x_ddot*1000.0f);
+    data_comp.u.y_ddot = (int16_t)(data->u.y_ddot*1000.0f);
+    data_comp.u.z_ddot = (int16_t)(data->u.z_ddot*1000.0f);
+#endif
     // Pack data
-    cbf_pack(sizeof(cbf_qp_data_comp_t), (uint8_t *)&data_comp);
+    cbf_pack(sizeof(cbf_qpdata_comp_t), (uint8_t *)&data_comp);
     // Send packet
     uart1SendData(sizeof(CBFPacket), (void *)pk_tx.raw);
     // AI Deck is processing the data
@@ -240,7 +264,7 @@ void aideck_send_cbf_data(const cbf_qp_data_t *data){
 }
 #endif
 
-#ifdef AI_CBF
+#if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
 // Pack data into CBFPacket pk_tx
 CBFPacket *cbf_pack(const uint8_t size, uint8_t *data){
   // Check data size
@@ -261,15 +285,19 @@ CBFPacket *cbf_pack(const uint8_t size, uint8_t *data){
 }
 #endif
 
-#ifdef AI_CBF
 // Give controller the CBF-QP Solution
-void aideck_get_safe_u(float u[4]){
-  u[0] = u.T;
-  u[1] = u.p;
-  u[2] = u.q;
-  u[3] = u.r;
-}
+void aideck_get_safe_u(float *u_control){
+#ifdef CBF_TYPE_EUL
+  u_control[0] = u.T;
+  u_control[1] = u.p;
+  u_control[2] = u.q;
+  u_control[3] = u.r;
+#elif CBF_TYPE_POS
+  u_control[0] = u.x_ddot;
+  u_control[1] = u.y_ddot;
+  u_control[2] = u.z_ddot;
 #endif
+}
 
 
 static const DeckDriver aideck_deck = {
@@ -286,7 +314,7 @@ static const DeckDriver aideck_deck = {
 
 LOG_GROUP_START(aideck)
 LOG_ADD(LOG_UINT8, receivebyte, &byte)
-#ifdef AI_CBF
+#if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
 LOG_ADD(LOG_UINT8, missed_cycles, &missed_cycles)
 #endif
 LOG_GROUP_STOP(aideck)

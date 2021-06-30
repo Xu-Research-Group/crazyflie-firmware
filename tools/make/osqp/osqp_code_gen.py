@@ -30,10 +30,10 @@ src = sys.argv[1]
 
 # Define problem data
 n = 3 # Variables
-m = 4 # Constraints
+m = 2 # Constraints
 P = sparse.csc_matrix(2*np.eye(n))
 q = np.ones(n)
-A = sparse.csc_matrix([[-1, 0, 0], [1, 0, 0], [0, -1, 0], [0, 1, 0]])
+A = sparse.csc_matrix([[-1, 0, 0], [1, 0, 0]])#, [0, -1, 0], [0, 1, 0]])
 l = -np.inf*np.ones(m)
 u = np.inf*np.ones(m)
 
@@ -42,7 +42,7 @@ u = np.inf*np.ones(m)
 m = osqp.OSQP()
 
 # Solver initialization
-m.setup(P, q, A, l, u)
+m.setup(P, q, A, l, u, check_termination=1)
 
 # Generate code
 m.codegen(src, force_rewrite=True, parameters='vectors',FLOAT=True,LONG=False)

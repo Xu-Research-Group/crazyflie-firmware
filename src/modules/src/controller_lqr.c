@@ -20,12 +20,7 @@
 
 #include "crtp_commander_sdlqr.h"
 
-#ifdef CF_CBF
-#include "osqp.h"
-#include "workspace.h"
-#endif
-
-#ifdef AI_CBF
+#if defined CBF_TYPE_EUL || defined CBF_TYPE_POS
 #include "aideck.h"
 #endif
 
@@ -60,8 +55,8 @@ PidObject pidT; // PID object for altitude (integral)
 #endif
 static bool flying = false; // Set thrust to 0 when false
 
-#ifdef AI_CBF
-static cbf_qp_data_t cbf_qp_data;
+#if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
+static cbf_qpdata_t qp_data;
 #endif
 
 // Logging parameters
@@ -91,6 +86,83 @@ static int to_pwm(float T){
   pwm -= 9000; // Offset calibration
   return pwm;
 }
+
+#ifdef CBF_TYPE_EUL
+/**
+ * Private function. Solve a QP-CBF to limit roll and pitch [phi theta]
+ * The OSQP problem is solved in the AI Deck
+ */
+static void apply_cbf_eul(const state_t *state){
+  // Populate cbf_qpdata_t
+  qp_data.phi = state->attitude.roll*DEG2RAD;
+  qp_data.theta = -state->attitude.pitch*DEG2RAD;
+  qp_data.u.T = u[0];
+  qp_data.u.p = u[1];
+  qp_data.u.q = u[2];
+  qp_data.u.r = u[3];
+  // Send to AI Deck
+  aideck_send_cbf_data(&qp_data);
+  // Get the most recent safe control received from AI Deck
+  aideck_get_safe_u(u);
+}
+#endif // CBF_TYPE_EUL
+
+
+#ifdef CBF_TYPE_POS
+/**
+ * Private function. Solve a QP-CBF to limit position [x y z]
+ * The OSQP problem is solved in the AI Deck
+ */
+static void apply_cbf_pos(const state_t *state){
+  // Get vars
+  float x_ddot;
+  float y_ddot;
+  float z_ddot;
+  float T = u_D6[0];
+  float phi = u_D6[1];
+  float theta = u_D6[2];
+  float psi = u_D6[3];
+  float x = state->position.x;
+  float y = state->position.y;
+  float z = state->position.z;
+  float x_dot = state->velocity.x;
+  float y_dot = state->velocity.y;
+  float z_dot = state->velocity.z;
+
+  // Virtualize inputs
+  x_ddot = T*(arm_sin_f32(phi)*arm_sin_f32(psi) +
+            arm_cos_f32(phi)*arm_sin_f32(theta)*arm_cos_f32(psi)); // x_ddot
+  y_ddot = T*(arm_cos_f32(phi)*arm_sin_f32(theta)*arm_sin_f32(psi) -
+                 arm_sin_f32(phi)*arm_cos_f32(psi)); // y_ddot
+  z_ddot = T*arm_cos_f32(phi)*arm_cos_f32(theta) - 9.81f; // z_ddot
+
+  // Populate qp_data
+  qp_data.x = x;
+  qp_data.y = y;
+  qp_data.z = z;
+  qp_data.x_dot = x_dot;
+  qp_data.y_dot = y_dot;
+  qp_data.z_dot = z_dot;
+  qp_data.u.x_ddot = x_ddot;
+  qp_data.u.y_ddot = y_ddot;
+  qp_data.u.z_ddot = z_ddot;
+
+  // Send qp_data
+  aideck_send_cbf_data(&qp_data);
+
+  // Get safe u
+  float mu[3];
+  aideck_get_safe_u(mu);
+
+  // Recover inputs
+  u_D6[3] = psi; // psi
+  u_D6[2] = atan((arm_cos_f32(psi)*mu[0] + arm_sin_f32(psi)*mu[1])/(mu[2]+9.81f)); // theta
+  u_D6[1] = atan((arm_sin_f32(psi)*mu[0] - arm_cos_f32(psi)*mu[1])/(mu[2]+9.81f)*arm_cos_f32(u_D6[2])); // phi
+  u_D6[0] = (mu[2]+9.81f)/(arm_cos_f32(u_D6[1])*arm_cos_f32(u_D6[2])); // T
+
+}
+#endif // CBF_TYPE_POS
+
 
 // Private function: D9LQR Policy update
 static void lqr_D9(setpoint_t *setpoint, const state_t *state, const uint32_t tick){
@@ -125,6 +197,11 @@ static void lqr_D9(setpoint_t *setpoint, const state_t *state, const uint32_t ti
     u[1] += setpoint->attitudeRate.roll;
     u[2] += setpoint->attitudeRate.pitch;
     u[3] += setpoint->attitudeRate.yaw;
+
+#ifdef CBF_TYPE_EUL
+    // Apply CBF_EUL
+    apply_cbf_eul(state);  // updates u
+#endif
   } // if RATE_DO_EXECUTE
 
 } // lqr_D9()
@@ -155,82 +232,16 @@ static void lqr_D6(setpoint_t *setpoint, const state_t *state, const uint32_t ti
     u_D6[1] += setpoint->attitude.roll;
     u_D6[2] += setpoint->attitude.pitch;
     u_D6[3] += setpoint->attitude.yaw;
+
+#ifdef CBF_TYPE_POS
+    // Apply CBF_POS
+    apply_cbf_pos(state);  // updates u_D6
+#endif
+
   } // if RATE_DO_EXECUTE
 
 } // lqr_D6()
 
-#ifdef CF_CBF
-/**
- * Private function. Solve a QP-CBF to limit position [x y]
- * The osqp workspace is generated before compilation, see:
- * ~/tools/make/osqp/osqp_code_gen.py
- */
-static int apply_cbf(const state_t *state){
-  // Get vars
-  float x_ddot;
-  float y_ddot;
-  float z_ddot;
-  float T = u_D6[0];
-  float phi = u_D6[1];
-  float theta = u_D6[2];
-  float psi = u_D6[3];
-  float x = state->position.x;
-  float y = state->position.y;
-  float x_dot = state->velocity.x;
-  float y_dot = state->velocity.y;
-
-  // Virtualize inputs
-  c_float mu_nom[3];
-  mu_nom[0] = T*(arm_sin_f32(phi)*arm_sin_f32(psi) +
-            arm_cos_f32(phi)*arm_sin_f32(theta)*arm_cos_f32(psi)); // x_ddot
-  mu_nom[1] = T*(arm_cos_f32(phi)*arm_sin_f32(theta)*arm_sin_f32(psi) -
-                 arm_sin_f32(phi)*arm_cos_f32(psi)); // y_ddot
-  mu_nom[2] = T*arm_cos_f32(phi)*arm_cos_f32(theta) - 9.81f; // z_ddot
-
-  // Update Linear Cost  q
-  c_float q[3] = {-2.0*mu_nom[0], -2.0*mu_nom[1], -2.0*mu_nom[2]};
-  osqp_update_lin_cost(&workspace,q); // Update q
-
-  // Update Lower Bound
-  c_float b_lower[4];
-  b_lower[0] = -(CF_CBF_K1*(CF_CBF_X_MAX-x) + CF_CBF_K2*(-x_dot));
-  b_lower[1] = -(CF_CBF_K1*(x-CF_CBF_X_MIN) + CF_CBF_K2*x_dot);
-  b_lower[2] = -(CF_CBF_K1*(CF_CBF_Y_MAX-y) + CF_CBF_K2*(-y_dot));
-  b_lower[3] = -(CF_CBF_K1*(y-CF_CBF_Y_MIN) + CF_CBF_K2*y_dot);
-  osqp_update_lower_bound(&workspace,b_lower);
-
-#ifdef CF_CBF_MOCK
-  // Solve mock CBF-QP
-  int exitflag = 0; // Success
-  x_ddot = mu_nom[0];
-  y_ddot = mu_nom[1];
-  z_ddot = mu_nom[2];
-#else
-  // Solve CBF-QP
-  int exitflag = osqp_solve(&workspace);
-  if(exitflag){ // Errors
-    DEBUG_PRINT("OSQP Solve error %d\n",exitflag);
-    x_ddot = mu_nom[0];
-    y_ddot = mu_nom[1];
-    z_ddot = mu_nom[2];
-  }
-  else{
-    x_ddot = workspace.solution->x[0];
-    y_ddot = workspace.solution->x[1];
-    z_ddot = workspace.solution->x[2];
-  }
-#endif
-
-  // Recover inputs
-  u_D6[3] = psi; // psi
-  u_D6[2] = atan((arm_cos_f32(psi)*x_ddot + arm_sin_f32(psi)*y_ddot)/(z_ddot+9.81f)); // theta
-  u_D6[1] = atan((arm_sin_f32(psi)*x_ddot - arm_cos_f32(psi)*y_ddot)/(z_ddot+9.81f)*arm_cos_f32(u_D6[2])); // phi
-  u_D6[0] = (z_ddot+9.81f)/(arm_cos_f32(u_D6[1])*arm_cos_f32(u_D6[2])); // T
-
-  // Return
-  return exitflag;
-}
-#endif // #ifdef CF_CBF
 
 
 
@@ -271,10 +282,6 @@ bool controllerLqrTest(void)
 {
   bool pass = true;
 
-#ifdef CF_CBF
-  pass &= OSQP_ENABLED; // OSQP Must be compiled to use the CF_CBF
-#endif
-
   pass &= attitudeControllerTest();
 
   return pass;
@@ -283,32 +290,23 @@ bool controllerLqrTest(void)
 
 void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t *sensors,
                    const state_t *state, const uint32_t tick){
-  // Flying safety
+  // Flying safety check at max Hz
   if (setpoint->position.z > 0)
     flying = true;
   else
     flying = false;
 
-  // Perform the LQR Update
+  // Perform the LQR Update at D9LQR_RATE or D6LQR_RATE
   if (mode==D9LQR)
     lqr_D9(setpoint, state, tick); // update u
   else if (mode==D6LQR){
     lqr_D6(setpoint, state, tick); // update u_D6
   }
 
-  // Apply CF_CBF
-#ifdef CF_CBF
-  if (mode==D6LQR){
-    if (RATE_DO_EXECUTE(D6LQR_RATE, tick))
-      apply_cbf(state);
-  }
-#endif
-
-
-  // Perform the Attitude PID Update if needed
+  // Perform the Attitude PID Update at ATTITUDE_RATE
   if (mode==D6LQR){ // update u
-    u[0] = u_D6[0]; // T is the same
     if (RATE_DO_EXECUTE(ATTITUDE_RATE, tick)){
+      u[0] = u_D6[0]; // T is the same
       attitudeControllerCorrectAttitudePID(state->attitude.roll, -state->attitude.pitch, state->attitude.yaw,
                                u_D6[1]*RAD2DEG, u_D6[2]*RAD2DEG, u_D6[3]*RAD2DEG,
                                &(u[1]), &(u[2]), &(u[3]) );
@@ -320,7 +318,7 @@ void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t 
   } // If mode==D6LQR
 
 #ifdef LQR_ALT_PID
-  // Add altitude integral action
+  // Add altitude integral action at Z_PID_RATE FIXME: Acts faster than CBFs
   if(RATE_DO_EXECUTE(Z_PID_RATE, tick)){
     pidSetDesired(&pidT, setpoint->position.z);
     pid_T = pidUpdate(&pidT, state->position.z, true);
@@ -328,38 +326,26 @@ void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t 
   }
 #endif
 
-  // Apply AI_CBF if needed
-#ifdef AI_CBF
-  // Populate cbf_qp_data
-  cbf_qp_data.phi = state->attitude.roll*DEG2RAD;
-  cbf_qp_data.theta = -state->attitude.pitch*DEG2RAD;
-  cbf_qp_data.u.T = u[0];
-  cbf_qp_data.u.p = u[1];
-  cbf_qp_data.u.q = u[2];
-  cbf_qp_data.u.r = u[3];
-  // Send to AI Deck
-  aideck_send_cbf_data(&cbf_qp_data);
-  // Get the most recent safe control received from AI Deck
-  aideck_get_safe_u(u);
-#endif
+  // Saturations, logging and conversions at ATTITUDE_RATE
+  if(RATE_DO_EXECUTE(ATTITUDE_RATE, tick)){
+    // Saturate thrust and pqr
+    u[0] = fmaxf(fminf(u[0],18.0f), 0.0f); // [0,18] m/s^2
+    u[1] = fmaxf(fminf(u[1],3.5f),-3.5f);  // +-200 deg/s
+    u[2] = fmaxf(fminf(u[2],3.5f),-3.5f);  // +-200 deg/s
+    u[3] = fmaxf(fminf(u[3],3.5f),-3.5f);  // +-200 deg/s
 
-  // Saturate thrust and pqr
-  u[0] = fmaxf(fminf(u[0],18.0f), 0.0f); // [0,18] m/s^2
-  u[1] = fmaxf(fminf(u[1],3.5f),-3.5f);  // +-200 deg/s
-  u[2] = fmaxf(fminf(u[2],3.5f),-3.5f);  // +-200 deg/s
-  u[3] = fmaxf(fminf(u[3],3.5f),-3.5f);  // +-200 deg/s
+    // Parameter logging
+    u_T = u[0];
+    u_p = u[1];
+    u_q = u[2];
+    u_r = u[3];
 
-  // Parameter logging
-  u_T = u[0];
-  u_p = u[1];
-  u_q = u[2];
-  u_r = u[3];
-
-  // convert [T, p, q, r] to 0xFFFF and deg/s
-  actuatorThrust = to_pwm(u[0]);
-  rateDesired.roll = u[1]*RAD2DEG;
-  rateDesired.pitch = u[2]*RAD2DEG;
-  rateDesired.yaw = u[3]*RAD2DEG;
+    // convert [T, p, q, r] to 0xFFFF and deg/s
+    actuatorThrust = to_pwm(u[0]);
+    rateDesired.roll = u[1]*RAD2DEG;
+    rateDesired.pitch = u[2]*RAD2DEG;
+    rateDesired.yaw = u[3]*RAD2DEG;
+  }
 
   // Set thrust to 0 if z_desired is 0 and we are close to target
   if((err.position.x + err.position.y + err.position.y) < 0.075f && setpoint->position.z == 0)
