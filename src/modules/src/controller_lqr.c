@@ -114,52 +114,21 @@ static void apply_cbf_eul(const state_t *state){
  * The OSQP problem is solved in the AI Deck
  */
 static void apply_cbf_pos(const state_t *state){
-  // Get vars
-  float x_ddot;
-  float y_ddot;
-  float z_ddot;
-  float T = u_D6[0];
-  float phi = u_D6[1];
-  float theta = u_D6[2];
-  float psi = u_D6[3];
-  float x = state->position.x;
-  float y = state->position.y;
-  float z = state->position.z;
-  float x_dot = state->velocity.x;
-  float y_dot = state->velocity.y;
-  float z_dot = state->velocity.z;
-
-  // Virtualize inputs
-  x_ddot = T*(arm_sin_f32(phi)*arm_sin_f32(psi) +
-            arm_cos_f32(phi)*arm_sin_f32(theta)*arm_cos_f32(psi)); // x_ddot
-  y_ddot = T*(arm_cos_f32(phi)*arm_sin_f32(theta)*arm_sin_f32(psi) -
-                 arm_sin_f32(phi)*arm_cos_f32(psi)); // y_ddot
-  z_ddot = T*arm_cos_f32(phi)*arm_cos_f32(theta) - 9.81f; // z_ddot
-
-  // Populate qp_data
-  qp_data.x = x;
-  qp_data.y = y;
-  qp_data.z = z;
-  qp_data.x_dot = x_dot;
-  qp_data.y_dot = y_dot;
-  qp_data.z_dot = z_dot;
-  qp_data.u.x_ddot = x_ddot;
-  qp_data.u.y_ddot = y_ddot;
-  qp_data.u.z_ddot = z_ddot;
-
-  // Send qp_data
+  // Populate cbf_qpdata_t
+  qp_data.x = state->position.x;
+//  qp_data.y = state->position.y;
+//  qp_data.z = state->position.z;
+  qp_data.x_dot = state->velocity.x;
+//  qp_data.y_dot = state->velocity.y;
+//  qp_data.z_dot = state->velocity.z;
+  qp_data.u.T = u_D6[0];
+  qp_data.u.phi = u_D6[1];
+  qp_data.u.theta = u_D6[2];
+  qp_data.u.psi = u_D6[3];
+  // Send to AI Deck
   aideck_send_cbf_data(&qp_data);
-
-  // Get safe u
-  float mu[3];
-  aideck_get_safe_u(mu);
-
-  // Recover inputs
-  u_D6[3] = psi; // psi
-  u_D6[2] = atan((arm_cos_f32(psi)*mu[0] + arm_sin_f32(psi)*mu[1])/(mu[2]+9.81f)); // theta
-  u_D6[1] = atan((arm_sin_f32(psi)*mu[0] - arm_cos_f32(psi)*mu[1])/(mu[2]+9.81f)*arm_cos_f32(u_D6[2])); // phi
-  u_D6[0] = (mu[2]+9.81f)/(arm_cos_f32(u_D6[1])*arm_cos_f32(u_D6[2])); // T
-
+  // Get the most recent safe control received from AI Deck
+  aideck_get_safe_u(u_D6);
 }
 #endif // CBF_TYPE_POS
 
@@ -359,8 +328,6 @@ void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t 
     // Attitude Rate PID update
     attitudeControllerCorrectRatePID(sensors->gyro.x, sensors->gyro.y, sensors->gyro.z,
                              rateDesired.roll, rateDesired.pitch, rateDesired.yaw);
-    // Power Distribution variables update
-    attitudeControllerGetActuatorOutput(&control->roll, &control->pitch, &control->yaw);
   }
 
   // Power Distribution variable update
@@ -376,6 +343,10 @@ void controllerLqr(control_t *control, setpoint_t *setpoint, const sensorData_t 
 #ifdef LQR_ALT_PID
     pidReset(&pidT); // Reset the altitude pid
 #endif
+  }
+  else{
+    // Power Distribution variables update
+    attitudeControllerGetActuatorOutput(&control->roll, &control->pitch, &control->yaw);
   }
 }
 

@@ -34,10 +34,10 @@
 #define Z_PID_RATE RATE_500_HZ
 #endif
 #ifndef D9LQR_RATE
-#define D9LQR_RATE RATE_25_HZ
+#define D9LQR_RATE RATE_100_HZ
 #endif
 #ifndef D6LQR_RATE
-#define D6LQR_RATE RATE_25_HZ
+#define D6LQR_RATE RATE_100_HZ
 #endif
 
 // Mode for the LQR

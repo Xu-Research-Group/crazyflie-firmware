@@ -93,15 +93,15 @@ static void NinaTask(void *param)
 #if defined CBF_TYPE_POS || CBF_TYPE_EUL
 // Update u with a stop command in case of error
 static void force_stop_u(void){
-#ifdef CBF_TYPE_EUL
   u.T = 0;
+#ifdef CBF_TYPE_EUL
   u.p = 0;
   u.q = 0;
   u.r = 0;
 #elif CBF_TYPE_POS
-  u.x_ddot = 0;
-  u.y_ddot = 0;
-  u.z_ddot = 0;
+  u.phi = 0;
+  u.theta = 0;
+  u.psi = 0;
 #endif
 }
 #endif
@@ -109,15 +109,15 @@ static void force_stop_u(void){
 #ifdef AI_CBF_DEBUG
 // DEBUG PRINT the u_t struct
 static void print_u(void){
-#ifdef CBF_TYPE_EUL
   DEBUG_PRINT("u.T = %.4f\n",(double)u.T);
+#ifdef CBF_TYPE_EUL
   DEBUG_PRINT("u.p = %.4f\n",(double)u.p);
   DEBUG_PRINT("u.q = %.4f\n",(double)u.q);
   DEBUG_PRINT("u.r = %.4f\n",(double)u.r);
 #elif CBF_TYPE_POS
-  DEBUG_PRINT("u.x_ddot = %.4f\n",(double)u.x_ddot);
-  DEBUG_PRINT("u.y_ddot = %.4f\n",(double)u.y_ddot);
-  DEBUG_PRINT("u.z_ddot = %.4f\n",(double)u.z_ddot);
+  DEBUG_PRINT("u.phi = %.4f\n",(double)u.phi);
+  DEBUG_PRINT("u.theta = %.4f\n",(double)u.theta);
+  DEBUG_PRINT("u.psi = %.4f\n",(double)u.psi);
 #endif
   DEBUG_PRINT("Missed Cycles = %d\n", missed_cycles);
 }
@@ -133,6 +133,7 @@ static void unpack(void){
   }
 }
 #endif
+
 
 #if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
 // Receive a full CBFPacket via UART
@@ -234,14 +235,15 @@ void aideck_send_cbf_data(const cbf_qpdata_t *data){
     data_comp.u.r = (int16_t)(data->u.r*1000.0f);
 #elif CBF_TYPE_POS
     data_comp.x = (int16_t)(data->x*1000.0f);
-    data_comp.y = (int16_t)(data->y*1000.0f);
-    data_comp.z = (int16_t)(data->z*1000.0f);
+//    data_comp.y = (int16_t)(data->y*1000.0f);
+//    data_comp.z = (int16_t)(data->z*1000.0f);
     data_comp.x_dot = (int16_t)(data->x_dot*1000.0f);
-    data_comp.y_dot = (int16_t)(data->y_dot*1000.0f);
-    data_comp.z_dot = (int16_t)(data->z_dot*1000.0f);
-    data_comp.u.x_ddot = (int16_t)(data->u.x_ddot*1000.0f);
-    data_comp.u.y_ddot = (int16_t)(data->u.y_ddot*1000.0f);
-    data_comp.u.z_ddot = (int16_t)(data->u.z_ddot*1000.0f);
+//    data_comp.y_dot = (int16_t)(data->y_dot*1000.0f);
+//    data_comp.z_dot = (int16_t)(data->z_dot*1000.0f);
+    data_comp.u.T = (int16_t)(data->u.T*1000.0f);
+    data_comp.u.phi = (int16_t)(data->u.phi*1000.0f);
+    data_comp.u.theta = (int16_t)(data->u.theta*1000.0f);
+    data_comp.u.psi = (int16_t)(data->u.psi*1000.0f);
 #endif
     // Pack data
     cbf_pack(sizeof(cbf_qpdata_comp_t), (uint8_t *)&data_comp);
@@ -270,6 +272,7 @@ CBFPacket *cbf_pack(const uint8_t size, uint8_t *data){
   // Check data size
   if (size > MAX_CBFPACKET_DATA_SIZE){
     pk_tx.header = 0;
+    DEBUG_PRINT("ERROR Size %d too large for CBFPacket (%d)\n",size,MAX_CBFPACKET_DATA_SIZE);
     return NULL;
   }
   // Populate header with 'V' char
@@ -293,9 +296,10 @@ void aideck_get_safe_u(float *u_control){
   u_control[2] = u.q;
   u_control[3] = u.r;
 #elif CBF_TYPE_POS
-  u_control[0] = u.x_ddot;
-  u_control[1] = u.y_ddot;
-  u_control[2] = u.z_ddot;
+  u_control[0] = u.T;
+  u_control[1] = u.phi;
+  u_control[2] = u.theta;
+  u_control[3] = u.psi;
 #endif
 }
 
