@@ -155,6 +155,7 @@ static void Gap8Task(void *param) {
 
   // Receive data in a loop
   while (1){
+    DEBUG_PRINT("Delay... dma_flag = %d \n",dma_flag);
     vTaskDelay(M2T(100));
 #if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
     if(dma_flag){

@@ -95,9 +95,9 @@ static void USART_Config(uint32_t baudrate, uint8_t *pulpRxBuffer, uint32_t BUFF
   /* Configure RX DMA */
   DMA_InitStructure.DMA_Channel = USARTx_RX_DMA_CHANNEL ;
   DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralToMemory ;
-  DMA_InitStructure.DMA_Memory0BaseAddr =(uint32_t)pulpRxBuffer ; 
+  DMA_InitStructure.DMA_Memory0BaseAddr =(uint32_t)pulpRxBuffer ;
   DMA_Init(USARTx_RX_DMA_STREAM,&DMA_InitStructure);
-         
+
   /* Enable USART */
   USART_Cmd(USARTx, ENABLE);
 }
