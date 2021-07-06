@@ -5,9 +5,9 @@
 #CFLAGS += -DCF_MASS=0.037f # in kg (AI Deck + MOCAP Deck)
 
 ## Enable the AI Deck CBF-QP for controller_lqr
-#CFLAGS += -DCBF_TYPE_POS
+CFLAGS += -DCBF_TYPE_POS
 #CFLAGS += -DCBF_TYPE_EUL
-#CFLAGS += -DAI_CBF_DEBUG
+CFLAGS += -DAI_CBF_DEBUG
 
 # Set to 1 to add OSQP to firmware compilation
 #COMPILE_OSQP := 1

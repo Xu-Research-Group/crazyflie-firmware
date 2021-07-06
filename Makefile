@@ -224,7 +224,7 @@ PROJ_OBJ += activeMarkerDeck.o
 ifeq ($(UART2_LINK), 1)
 CFLAGS += -DUART2_LINK_COMM
 else
-PROJ_OBJ += aideck.o
+PROJ_OBJ += aideck.o uart_dma_pulp.o
 endif
 
 ifeq ($(LPS_TDOA_ENABLE), 1)

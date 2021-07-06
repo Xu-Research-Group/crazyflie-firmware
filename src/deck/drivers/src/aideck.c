@@ -48,7 +48,10 @@
 
 #include "aideck.h"
 #include "stabilizer_types.h"
+#include "uart_dma_setup.h"
 
+
+volatile uint8_t dma_flag = 0;
 #if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
 static u_t u;
 static CBFPacket pk_rx; // Packet for receiving via UART
@@ -124,35 +127,18 @@ static void print_u(void){
 #endif
 
 #if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
-// Update the u struct from received data
+// Update the u struct from received data and clear pk_rx
 static void unpack(void){
-  pk_rx.header = 0;
-  for(int i=0; i<sizeof(u_t); i++){
-    ((uint8_t*)&u)[i] = pk_rx.data[i];
-    pk_rx.data[i] = '\0'; // Empty packet
+  if(pk_rx.header=='V'){
+    aideck_ready_flag = 1; // AI Deck is ready for more data
+    for(int i=0; i<sizeof(u_t); i++){
+      ((uint8_t*)&u)[i] = pk_rx.data[i];
+    }
   }
+  memset(pk_rx.raw, 0, sizeof(CBFPacket)); // Clear packet for new data
 }
 #endif
 
-
-#if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
-// Receive a full CBFPacket via UART
-// return 0 if healthy pk, 1 otherwise
-static int receive_pk(void){
-  uart1Getchar(&byte); // Receive byte
-  pk_rx.header = byte; // Update header
-  int unhealthy = (byte!='V'); // Is it healthy?
-  if(unhealthy) return unhealthy;
-  // Receive rest of the packet if healthy
-  for(int i=0; i<MAX_CBFPACKET_DATA_SIZE; i++){
-    uart1Getchar(&byte); // Receive byte
-    pk_rx.data[i] = byte;
-  }
-  unpack(); // Unpack the CBFPacket
-  aideck_ready_flag = 1; // AI Deck is ready for more data
-  return unhealthy;
-}
-#endif
 
 
 // AI Deck task to listen for UART traffic from the AI Deck
@@ -169,27 +155,20 @@ static void Gap8Task(void *param) {
 
   // Receive data in a loop
   while (1){
+    vTaskDelay(M2T(100));
 #if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
-    if (receive_pk()){ // Flush RX after unhealthy packet
-      pinMode(DECK_GPIO_IO4, OUTPUT); // TODO Is this needed?
-      digitalWrite(DECK_GPIO_IO4, LOW);
-      vTaskDelay(10);
-      digitalWrite(DECK_GPIO_IO4, HIGH);
-      pinMode(DECK_GPIO_IO4, INPUT_PULLUP);
-    }
-#else
-    vTaskDelay(M2T(1000));
-#endif
+    if(dma_flag){
+      dma_flag = 0; // Clear the flag
+      unpack(); // Process CBFPacket
 #ifdef AI_CBF_DEBUG
-    else
       print_u();
 #endif
+    }
+#endif // CBF_TYPE
   }
 }
 
-static void aideckInit(DeckInfo *info)
-{
-
+static void aideckInit(DeckInfo *info){
   if (isInit)
       return;
 
@@ -200,6 +179,8 @@ static void aideckInit(DeckInfo *info)
               AI_DECK_TASK_PRI, NULL);
 
 #if defined CBF_TYPE_EUL || defined CBF_TYPE_POS
+  // Start DMA
+  USART_DMA_Start(115200, pk_rx.raw, sizeof(CBFPacket));
   // The AI Deck is ready for UART Data
   aideck_ready_flag = 1;
 #endif
@@ -215,9 +196,7 @@ static void aideckInit(DeckInfo *info)
   isInit = true;
 }
 
-static bool aideckTest()
-{
-
+static bool aideckTest(){
     return true;
 }
 
@@ -304,6 +283,14 @@ void aideck_get_safe_u(float *u_control){
 }
 
 
+// IRQ DMA
+void __attribute__((used)) DMA1_Stream1_IRQHandler(void){
+  DEBUG_PRINT("DMA_Transfer\n");
+  DMA_ClearFlag(DMA1_Stream1, UART3_RX_DMA_ALL_FLAGS);
+  dma_flag = 1;
+}
+
+
 static const DeckDriver aideck_deck = {
     .vid = 0xBC,
     .pid = 0x12,
@@ -315,6 +302,8 @@ static const DeckDriver aideck_deck = {
     .init = aideckInit,
     .test = aideckTest,
 };
+
+
 
 LOG_GROUP_START(aideck)
 LOG_ADD(LOG_UINT8, receivebyte, &byte)
