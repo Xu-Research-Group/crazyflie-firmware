@@ -19,6 +19,13 @@ DMA_InitTypeDef  DMA_InitStructure;
 
 static void USART_Config(uint32_t baudrate, uint8_t *pulpRxBuffer, uint32_t BUFFERSIZE);
 
+// Send size bytes of data via USARTx
+void USART_Send(uint32_t size, uint8_t *data){
+  for(int i=0; i<size; i++){
+    while(!(USARTx->SR & USART_FLAG_TXE));
+    USARTx->DR = (data[i] & 0x00FF);
+  }
+}
 
 // Reset the counter of the DMA to start transfer at initial address
 void USART_DMA_ResetCounter(const int remaining_bytes, void *ptr_start){
@@ -79,21 +86,21 @@ static void USART_Config(uint32_t baudrate, uint8_t *pulpRxBuffer, uint32_t BUFF
   // Enable the DMA clock
   RCC_AHB1PeriphClockCmd(USARTx_DMAx_CLK, ENABLE);
 
+  // Configure USART Rx as input floating
+  GPIO_InitStructure.GPIO_Pin = USARTx_RX_PIN;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
+  GPIO_Init(USARTx_RX_GPIO_PORT, &GPIO_InitStructure);
+  // Configure USART Tx as alternate function
+  GPIO_InitStructure.GPIO_Pin = USARTx_TX_PIN;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_25MHz;
+  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
+  GPIO_Init(USARTx_TX_GPIO_PORT, &GPIO_InitStructure);
+
   // Connect USART pins to Crazyflie RX1 annd TX1 - USART3 in the STM32 */
   GPIO_PinAFConfig(USARTx_TX_GPIO_PORT, USARTx_TX_SOURCE, USARTx_TX_AF);
   GPIO_PinAFConfig(USARTx_RX_GPIO_PORT, USARTx_RX_SOURCE, USARTx_RX_AF);
-
-  // Configure USART Tx and Rx as alternate function push-pull
-  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF;
-  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_100MHz;
-  GPIO_InitStructure.GPIO_OType = GPIO_OType_PP;
-  GPIO_InitStructure.GPIO_PuPd = GPIO_PuPd_UP;
-
-  GPIO_InitStructure.GPIO_Pin = USARTx_TX_PIN;
-  GPIO_Init(USARTx_TX_GPIO_PORT, &GPIO_InitStructure);
-
-  GPIO_InitStructure.GPIO_Pin = USARTx_RX_PIN;
-  GPIO_Init(USARTx_RX_GPIO_PORT, &GPIO_InitStructure);
 
   // USARTx configuration
   USART_OverSampling8Cmd(USARTx, ENABLE);
@@ -104,7 +111,7 @@ static void USART_Config(uint32_t baudrate, uint8_t *pulpRxBuffer, uint32_t BUFF
   /* When using Parity the word length must be configured to 9 bits */
   USART_InitStructure.USART_Parity = USART_Parity_No;
   USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
-  USART_InitStructure.USART_Mode = USART_Mode_Rx;
+  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
   USART_Init(USARTx, &USART_InitStructure);
 
   /* Configure DMA Initialization Structure */

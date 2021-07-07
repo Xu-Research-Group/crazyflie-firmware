@@ -32,7 +32,6 @@
 #include "stm32fxxx.h"
 #include "config.h"
 #include "console.h"
-#include "uart1.h"
 #include "debug.h"
 #include "deck.h"
 #include "FreeRTOS.h"
@@ -43,8 +42,7 @@
 #include "log.h"
 #include "param.h"
 #include "system.h"
-#include "uart1.h"
-#include "uart2.h"
+//#include "uart2.h"
 
 #include "aideck.h"
 #include "aideck_uart_dma.h"
@@ -61,7 +59,6 @@ static uint8_t missed_cycles; // Keeps track of the number of cbf_qpdata that ha
 static cbf_qpdata_comp_t data_comp; // Compressed CBF-QP Data
 #endif
 static bool isInit = false;
-static char byte; // char buffer for RX
 
 //Uncomment when NINA printout read is desired from console
 //#define DEBUG_NINA_PRINT
@@ -122,7 +119,7 @@ static void print_u(void){
   DEBUG_PRINT("u.theta = %.4f\n",(double)u.theta);
   DEBUG_PRINT("u.psi = %.4f\n",(double)u.psi);
 #endif
-  DEBUG_PRINT("Missed Cycles = %d\n", missed_cycles);
+  DEBUG_PRINT("Missed Cycles = %d\n\n", missed_cycles);
 }
 #endif
 
@@ -163,7 +160,7 @@ static void Gap8Task(void *param) {
     if(dma_flag){
       dma_flag = 0; // Clear the flag
       if(unpack()){ // process CBFPacket
-        USART_DMA_ResetCounter(sizeof(CBFPacket), pk_rx.raw);
+        USART_DMA_ResetCounter(sizeof(CBFPacket), pk_rx.raw); // Sync with AI Deck
       }
 #ifdef AI_CBF_DEBUG
       print_u(); // Show debug info
@@ -179,14 +176,12 @@ static void aideckInit(DeckInfo *info){
   if (isInit)
       return;
 
-  // Intialize the UART for the GAP8
-  //uart1Init(115200);
   // Initialize task for the GAP8
   xTaskCreate(Gap8Task, AI_DECK_GAP_TASK_NAME, AI_DECK_TASK_STACKSIZE, NULL,
               AI_DECK_TASK_PRI, NULL);
 
 #if defined CBF_TYPE_EUL || defined CBF_TYPE_POS
-  // Start DMA
+  // Start DMA Rx and configure USART Tx Rx
   USART_DMA_Start(115200, pk_rx.raw, sizeof(CBFPacket));
   // The AI Deck is ready for UART Data
   aideck_ready_flag = 1;
@@ -234,7 +229,7 @@ void aideck_send_cbf_data(const cbf_qpdata_t *data){
     // Pack data
     cbf_pack(sizeof(cbf_qpdata_comp_t), (uint8_t *)&data_comp);
     // Send packet
-    //uart1SendData(sizeof(CBFPacket), (void *)pk_tx.raw);
+    USART_Send(sizeof(CBFPacket), pk_tx.raw);
     // AI Deck is processing the data
     aideck_ready_flag = 0;
     missed_cycles = 0; // Reset cycles
@@ -312,7 +307,6 @@ static const DeckDriver aideck_deck = {
 
 
 LOG_GROUP_START(aideck)
-LOG_ADD(LOG_UINT8, receivebyte, &byte)
 #if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
 LOG_ADD(LOG_UINT8, missed_cycles, &missed_cycles)
 #endif
