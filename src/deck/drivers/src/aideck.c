@@ -47,8 +47,8 @@
 #include "uart2.h"
 
 #include "aideck.h"
+#include "aideck_uart_dma.h"
 #include "stabilizer_types.h"
-#include "uart_dma_setup.h"
 
 
 volatile uint8_t dma_flag = 0;
@@ -128,14 +128,17 @@ static void print_u(void){
 
 #if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
 // Update the u struct from received data and clear pk_rx
-static void unpack(void){
-  if(pk_rx.header=='V'){
-    aideck_ready_flag = 1; // AI Deck is ready for more data
-    for(int i=0; i<sizeof(u_t); i++){
-      ((uint8_t*)&u)[i] = pk_rx.data[i];
-    }
+static uint8_t unpack(void){
+  aideck_ready_flag = 1; // AI Deck is ready for more data
+  if(pk_rx.header!='V'){ return 1; // Check healthy pk
+    memset(pk_rx.raw, 0, sizeof(CBFPacket)); // Clear packet for new data
+    return 1;
+  }
+  for(int i=0; i<sizeof(u_t); i++){ // TODO: do with memcpy instead?
+    ((uint8_t*)&u)[i] = pk_rx.data[i];
   }
   memset(pk_rx.raw, 0, sizeof(CBFPacket)); // Clear packet for new data
+  return 0;
 }
 #endif
 
@@ -155,16 +158,19 @@ static void Gap8Task(void *param) {
 
   // Receive data in a loop
   while (1){
-    DEBUG_PRINT("Delay... dma_flag = %d \n",dma_flag);
-    vTaskDelay(M2T(100));
 #if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
+    vTaskDelay(M2T(1));
     if(dma_flag){
       dma_flag = 0; // Clear the flag
-      unpack(); // Process CBFPacket
+      if(unpack()){ // process CBFPacket
+        USART_DMA_ResetCounter(sizeof(CBFPacket), pk_rx.raw);
+      }
 #ifdef AI_CBF_DEBUG
-      print_u();
+      print_u(); // Show debug info
 #endif
     }
+#else // CBF_TYPE
+    vTaskDelay(M2T(100)); // Longer delay if not in CBF mode
 #endif // CBF_TYPE
   }
 }
@@ -174,7 +180,7 @@ static void aideckInit(DeckInfo *info){
       return;
 
   // Intialize the UART for the GAP8
-  uart1Init(115200);
+  //uart1Init(115200);
   // Initialize task for the GAP8
   xTaskCreate(Gap8Task, AI_DECK_GAP_TASK_NAME, AI_DECK_TASK_STACKSIZE, NULL,
               AI_DECK_TASK_PRI, NULL);
@@ -228,7 +234,7 @@ void aideck_send_cbf_data(const cbf_qpdata_t *data){
     // Pack data
     cbf_pack(sizeof(cbf_qpdata_comp_t), (uint8_t *)&data_comp);
     // Send packet
-    uart1SendData(sizeof(CBFPacket), (void *)pk_tx.raw);
+    //uart1SendData(sizeof(CBFPacket), (void *)pk_tx.raw);
     // AI Deck is processing the data
     aideck_ready_flag = 0;
     missed_cycles = 0; // Reset cycles
@@ -257,7 +263,7 @@ CBFPacket *cbf_pack(const uint8_t size, uint8_t *data){
   }
   // Populate header with 'V' char
   pk_tx.header = 'V'; // 86. 0x56
-  // Fill data
+  // Fill data TODO: Use memcpy(*dest, *src, size) instead
   for(int i=0; i<MAX_CBFPACKET_DATA_SIZE; i++){
     if (i<size)
       pk_tx.data[i] = data[i];
@@ -286,7 +292,6 @@ void aideck_get_safe_u(float *u_control){
 
 // IRQ DMA
 void __attribute__((used)) DMA1_Stream1_IRQHandler(void){
-  DEBUG_PRINT("DMA_Transfer\n");
   DMA_ClearFlag(DMA1_Stream1, UART3_RX_DMA_ALL_FLAGS);
   dma_flag = 1;
 }
@@ -297,8 +302,8 @@ static const DeckDriver aideck_deck = {
     .pid = 0x12,
     .name = "bcAI",
 
-    .usedPeriph = 0,
-    .usedGpio = 0, // FIXME: Edit the used GPIOs
+    .usedPeriph = DECK_USING_UART1 | DECK_USING_UART2, // GAP | NINA
+    .usedGpio = DECK_USING_RX1 | DECK_USING_TX1 | DECK_USING_RX2 | DECK_USING_TX2,
 
     .init = aideckInit,
     .test = aideckTest,

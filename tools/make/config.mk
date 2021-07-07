@@ -5,7 +5,7 @@
 #CFLAGS += -DCF_MASS=0.037f # in kg (AI Deck + MOCAP Deck)
 
 ## Enable the AI Deck CBF-QP for controller_lqr
-CFLAGS += -DCBF_TYPE_POS
+#CFLAGS += -DCBF_TYPE_POS
 #CFLAGS += -DCBF_TYPE_EUL
 #CFLAGS += -DAI_CBF_DEBUG
 
