@@ -131,9 +131,7 @@ static uint8_t unpack(void){
     memset(pk_rx.raw, 0, sizeof(CBFPacket)); // Clear packet for new data
     return 1;
   }
-  for(int i=0; i<sizeof(u_t); i++){ // TODO: do with memcpy instead?
-    ((uint8_t*)&u)[i] = pk_rx.data[i];
-  }
+  memcpy(&u, pk_rx.data, sizeof(u_t)); // Extract data from packet
   memset(pk_rx.raw, 0, sizeof(CBFPacket)); // Clear packet for new data
   return 0;
 }
@@ -230,6 +228,7 @@ void aideck_send_cbf_data(const cbf_qpdata_t *data){
     cbf_pack(sizeof(cbf_qpdata_comp_t), (uint8_t *)&data_comp);
     // Send packet
     USART_Send(sizeof(CBFPacket), pk_tx.raw);
+    memset(&pk_tx, 0, sizeof(CBFPacket)); // Clear packet after sending
     // AI Deck is processing the data
     aideck_ready_flag = 0;
     missed_cycles = 0; // Reset cycles
@@ -256,15 +255,12 @@ CBFPacket *cbf_pack(const uint8_t size, uint8_t *data){
     DEBUG_PRINT("ERROR Size %d too large for CBFPacket (%d)\n",size,MAX_CBFPACKET_DATA_SIZE);
     return NULL;
   }
+
   // Populate header with 'V' char
-  pk_tx.header = 'V'; // 86. 0x56
-  // Fill data TODO: Use memcpy(*dest, *src, size) instead
-  for(int i=0; i<MAX_CBFPACKET_DATA_SIZE; i++){
-    if (i<size)
-      pk_tx.data[i] = data[i];
-    else
-      pk_tx.data[i] = '\0';
-  }
+  pk_tx.header = 'V'; // 0d86 0x56 0b01010110
+  // Populate data array
+  memcpy(pk_tx.data, data, size);
+
   return &pk_tx;
 }
 #endif
