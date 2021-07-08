@@ -45,12 +45,11 @@
 //#include "uart2.h"
 
 #include "aideck.h"
-#include "aideck_uart_dma.h"
 #include "stabilizer_types.h"
+#include "aideck_uart_dma.h"
 
-
-volatile uint8_t dma_flag = 0;
 #if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
+volatile uint8_t dma_flag = 0;
 static u_t u;
 static CBFPacket pk_rx; // Packet for receiving via UART
 static CBFPacket pk_tx; // Packet to send via UART
@@ -283,8 +282,10 @@ void aideck_get_safe_u(float *u_control){
 
 // IRQ DMA
 void __attribute__((used)) DMA1_Stream1_IRQHandler(void){
+#if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
   DMA_ClearFlag(DMA1_Stream1, UART3_RX_DMA_ALL_FLAGS);
   dma_flag = 1;
+#endif
 }
 
 
