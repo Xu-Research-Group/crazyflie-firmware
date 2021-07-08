@@ -90,7 +90,7 @@ static void NinaTask(void *param)
 }
 #endif
 
-#if defined CBF_TYPE_POS || CBF_TYPE_EUL
+#if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
 // Update u with a stop command in case of error
 static void force_stop_u(void){
   u.T = 0;
@@ -200,7 +200,7 @@ static bool aideckTest(){
     return true;
 }
 
-#if defined CBF_TYPE_EUL || CBF_TYPE_POS
+#if defined CBF_TYPE_EUL || defined CBF_TYPE_POS
 // Send the CBF-QP Parametric data via UART1
 void aideck_send_cbf_data(const cbf_qpdata_t *data){
   if(aideck_ready_flag){ // Is the AI Deck ready to receive data?
