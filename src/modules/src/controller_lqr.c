@@ -216,23 +216,40 @@ static void lqr_D6(setpoint_t *setpoint, const state_t *state, const uint32_t ti
 
 void controllerLqrInit(void){
   // Initialize 9-Dim Kalman gain with default Linearization
-  KD9[0][2] = 31.6228f;
-  KD9[0][8] = 12.7768f;
-  KD9[1][1] = -4.4732f;
-  KD9[1][3] = 7.6869f;
-  KD9[1][7] = -3.0014f;
-  KD9[2][0] = 4.4732f;
-  KD9[2][4] = 7.6869f;
-  KD9[2][6] = 3.0014f;
-  KD9[3][5] = 1.0f;
+  //KD9[0][2] = 31.6228f;
+  //KD9[0][8] = 12.7768f;
+  //KD9[1][1] = -4.4732f;
+  //KD9[1][3] = 7.6869f;
+  //KD9[1][7] = -3.0014f;
+  //KD9[2][0] = 4.4732f;
+  //KD9[2][4] = 7.6869f;
+  //KD9[2][6] = 3.0014f;
+  //KD9[3][5] = 1.0f;
+  // KD9 rho=1 Richard Murray Method
+  KD9[0][2] = 4.0f;
+  KD9[0][8] = 3.4641f;
+  KD9[1][1] = -3.4907f;
+  KD9[1][3] = 7.8518f;
+  KD9[1][7] = -2.9384f;
+  KD9[2][0] = 3.4907f;
+  KD9[2][4] = 7.8518f;
+  KD9[2][6] = 2.9384f;
+  KD9[3][5] = 2.0f;
 
   // Initialize 6-Dim Kalman gain with default Linearization
-  KD6[0][2] = 31.6228f;
-  KD6[0][5] =  8.5584f;
-  KD6[1][1] = -2.2361f;
-  KD6[1][4] = -0.7112f;
-  KD6[2][0] =  2.2361f;
-  KD6[2][3] =  0.7112f;
+  //KD6[0][2] = 31.6228f;
+  //KD6[0][5] =  8.5584f;
+  //KD6[1][1] = -2.2361f;
+  //KD6[1][4] = -0.7112f;
+  //KD6[2][0] =  2.2361f;
+  //KD6[2][3] =  0.7112f;
+  // KD6 rho=0.5 Richard Murray Method
+  KD6[0][2] = 5.6569f;
+  KD6[0][5] = 4.3947f;
+  KD6[1][1] = -2.4683f;
+  KD6[1][4] = -1.4235f;
+  KD6[2][0] = 2.4683f;
+  KD6[2][3] = 1.4235f;
 
 #ifdef LQR_ALT_PID
   // Initialize altitude pid (T)
