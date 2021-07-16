@@ -16,7 +16,6 @@
 #ifndef __AIDECK_UART_DMA_H
 #define __AIDECK_UART_DMA_H
 
-
 #include "stm32f4xx.h"
 
 
@@ -66,6 +65,7 @@
 #define USARTx_DMA_RX_IRQHandler         DMA1_Stream1_IRQHandler
 
 #define UART3_RX_DMA_ALL_FLAGS (DMA_FLAG_FEIF1 | DMA_FLAG_DMEIF1 | DMA_FLAG_TEIF1 | DMA_FLAG_HTIF1 | DMA_FLAG_TCIF1 )
+#define UART3_TX_DMA_ALL_FLAGS (DMA_FLAG_FEIF1 | DMA_FLAG_DMEIF1 | DMA_FLAG_TEIF1 | DMA_FLAG_HTIF1 | DMA_FLAG_TCIF1 )
 
 // Start the DMA RX configuration
 void USART_DMA_Start(uint32_t baudrate, uint8_t *pulpRxBuffer, uint32_t BUFFERSIZE);
@@ -73,5 +73,7 @@ void USART_DMA_Start(uint32_t baudrate, uint8_t *pulpRxBuffer, uint32_t BUFFERSI
 void USART_DMA_ResetCounter(const int remaining_bytes, void *ptr_start);
 // Send size bytes of data via uart1 (non-dma)
 void USART_Send(uint32_t size, uint8_t *data);
+// Send size bytes of data via uart1 with DMA
+void USART_DMA_Send(uint32_t size, uint8_t *data);
 
 #endif

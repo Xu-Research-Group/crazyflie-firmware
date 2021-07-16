@@ -13,11 +13,14 @@
  * Jul 7, 2021
  */
 
+#include <string.h>
 #include "aideck_uart_dma.h"
+#include "nvicconf.h"
 
 DMA_InitTypeDef  DMA_InitStructure;
+static uint8_t bufferTx[64];
 
-static void USART_Config(uint32_t baudrate, uint8_t *pulpRxBuffer, uint32_t BUFFERSIZE);
+static void USART_Config(uint32_t baudrate, uint8_t *bufferRx, uint32_t BUFFERSIZE);
 
 // Send size bytes of data via USARTx
 void USART_Send(uint32_t size, uint8_t *data){
@@ -25,6 +28,25 @@ void USART_Send(uint32_t size, uint8_t *data){
     while(!(USARTx->SR & USART_FLAG_TXE));
     USARTx->DR = (data[i] & 0x00FF);
   }
+}
+
+// Send size bytes of data via USARTx with DMA
+void USART_DMA_Send(uint32_t size, uint8_t *data){
+  // Wait for DMA to be free
+  while(DMA_GetCmdStatus(USARTx_TX_DMA_STREAM) != DISABLE);
+  // Copy data in bufferTx
+  memcpy(bufferTx, data, size);
+  DMA_InitStructure.DMA_BufferSize = size;
+  // Init new DMA stream
+  DMA_Init(USARTx_TX_DMA_STREAM, &DMA_InitStructure);
+  // Enable the Transfer Complete Interrupt
+  DMA_ITConfig(USARTx_TX_DMA_STREAM, DMA_IT_TC, ENABLE);
+  // Enable USART DMA TX Requests
+  USART_DMACmd(USARTx, USART_DMAReq_Tx, ENABLE);
+  // Clear transfer complete
+  USART_ClearFlag(USARTx, USART_FLAG_TC);
+  // Enable DMA USART TX Stream
+  DMA_Cmd(USARTx_TX_DMA_STREAM, ENABLE);
 }
 
 // Reset the counter of the DMA to start transfer at initial address
@@ -49,10 +71,11 @@ void USART_DMA_ResetCounter(const int remaining_bytes, void *ptr_start){
 }
 
 
-void USART_DMA_Start(uint32_t baudrate, uint8_t *pulpRxBuffer, uint32_t BUFFERSIZE)
+// Configure the DMA and start it
+void USART_DMA_Start(uint32_t baudrate, uint8_t *bufferRx, uint32_t BUFFERSIZE)
 {
   // Setup Communication
-  USART_Config(baudrate, pulpRxBuffer, BUFFERSIZE);
+  USART_Config(baudrate, bufferRx, BUFFERSIZE);
 
   DMA_ITConfig(USARTx_RX_DMA_STREAM, DMA_IT_TC, ENABLE);
 
@@ -67,12 +90,20 @@ void USART_DMA_Start(uint32_t baudrate, uint8_t *pulpRxBuffer, uint32_t BUFFERSI
 
   // Clear USART Transfer Complete Flags
   USART_ClearFlag(USARTx,USART_FLAG_TC);
-
   DMA_ClearFlag(USARTx_RX_DMA_STREAM, UART3_RX_DMA_ALL_FLAGS);
-  NVIC_EnableIRQ(DMA1_Stream1_IRQn);
+
+  // Interrupts
+  NVIC_EnableIRQ(USARTx_DMA_RX_IRQn);
+  // TX Interrupt
+  NVIC_InitTypeDef NVIC_InitStructure;
+  NVIC_InitStructure.NVIC_IRQChannel = USARTx_DMA_TX_IRQn;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = NVIC_MID_PRI;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitStructure);
 }
 
-static void USART_Config(uint32_t baudrate, uint8_t *pulpRxBuffer, uint32_t BUFFERSIZE)
+static void USART_Config(uint32_t baudrate, uint8_t *bufferRx, uint32_t BUFFERSIZE)
 {
   USART_InitTypeDef USART_InitStructure;
   GPIO_InitTypeDef GPIO_InitStructure;
@@ -114,7 +145,7 @@ static void USART_Config(uint32_t baudrate, uint8_t *pulpRxBuffer, uint32_t BUFF
   USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
   USART_Init(USARTx, &USART_InitStructure);
 
-  /* Configure DMA Initialization Structure */
+  /* Configure RX DMA Initialization Structure */
   DMA_InitStructure.DMA_BufferSize = BUFFERSIZE ;
   DMA_InitStructure.DMA_FIFOMode = DMA_FIFOMode_Disable ;
   DMA_InitStructure.DMA_FIFOThreshold = DMA_FIFOThreshold_1QuarterFull ;
@@ -129,12 +160,27 @@ static void USART_Config(uint32_t baudrate, uint8_t *pulpRxBuffer, uint32_t BUFF
   DMA_InitStructure.DMA_Priority = DMA_Priority_High;
 
   /* Configure RX DMA */
-  DMA_InitStructure.DMA_Channel = USARTx_RX_DMA_CHANNEL ;
-  DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralToMemory ;
-  DMA_InitStructure.DMA_Memory0BaseAddr =(uint32_t)pulpRxBuffer;
-  DMA_Init(USARTx_RX_DMA_STREAM,&DMA_InitStructure);
+  DMA_InitStructure.DMA_Channel = USARTx_RX_DMA_CHANNEL;
+  DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralToMemory;
+  DMA_InitStructure.DMA_Memory0BaseAddr =(uint32_t)bufferRx;
+  DMA_Init(USARTx_RX_DMA_STREAM, &DMA_InitStructure);
+
+  /* Configure TX DMA Initialization Structure */
+  DMA_InitStructure.DMA_Mode = DMA_Mode_Normal;
+  DMA_InitStructure.DMA_Channel = USARTx_TX_DMA_CHANNEL;
+  DMA_InitStructure.DMA_DIR = DMA_DIR_MemoryToPeripheral;
+  DMA_InitStructure.DMA_Memory0BaseAddr =(uint32_t)bufferTx;
+  DMA_Init(USARTx_TX_DMA_STREAM, &DMA_InitStructure);
 
   /* Enable USART */
   USART_Cmd(USARTx, ENABLE);
 }
 
+
+void __attribute__((used)) DMA1_Stream3_IRQHandler(void){
+  // Stop and cleanup DMA Stream
+  DMA_ITConfig(USARTx_TX_DMA_STREAM, DMA_IT_TC, DISABLE);
+  DMA_ClearITPendingBit(USARTx_TX_DMA_STREAM, USARTx_TX_DMA_FLAG_TCIF);
+  USART_DMACmd(USARTx, USART_DMAReq_Tx, DISABLE);
+  DMA_Cmd(USARTx_TX_DMA_STREAM, DISABLE);
+}

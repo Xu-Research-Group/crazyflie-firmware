@@ -385,6 +385,7 @@ void __attribute__((used)) BMI088_SPI_TX_DMA_IRQHandler(void)
   }
 }
 
+#if 0
 void __attribute__((used)) BMI088_SPI_RX_DMA_IRQHandler(void)
 {
   portBASE_TYPE xHigherPriorityTaskWoken = pdFALSE;
@@ -410,4 +411,4 @@ void __attribute__((used)) BMI088_SPI_RX_DMA_IRQHandler(void)
     portYIELD();
   }
 }
-
+#endif

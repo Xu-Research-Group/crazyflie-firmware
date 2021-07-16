@@ -89,6 +89,27 @@ static void NinaTask(void *param)
 }
 #endif
 
+#ifdef AI_CBF_DEBUG
+static uint8_t hx_code[2];
+// Transform a raw (0-16) number
+// to the equivalent ASCII char in
+// HEX code
+uint8_t offset_hex(uint8_t raw){
+  if(raw < 10)
+    return(raw + 48);
+  else
+    return(raw + 87);
+}
+// Allow DEBUG_PRINT to display HEX code
+// Convert 1 byte to 2 Chars representing
+// the HEX code for the byte
+static void hex_to_char(uint8_t hex){
+  hx_code[0] = offset_hex(hex/16);
+  hx_code[1] = offset_hex(hex%16);
+}
+
+#endif
+
 #if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
 // Update u with a stop command in case of error
 static void force_stop_u(void){
@@ -125,11 +146,11 @@ static void print_u(void){
 #if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
 // Update the u struct from received data and clear pk_rx
 static uint8_t unpack(void){
-  aideck_ready_flag = 1; // AI Deck is ready for more data
   if(pk_rx.header!='V'){ return 1; // Check healthy pk
     memset(pk_rx.raw, 0, sizeof(CBFPacket)); // Clear packet for new data
     return 1;
   }
+  aideck_ready_flag = 1; // AI Deck is ready for more data
   memcpy(&u, pk_rx.data, sizeof(u_t)); // Extract data from packet
   memset(pk_rx.raw, 0, sizeof(CBFPacket)); // Clear packet for new data
   return 0;
@@ -158,6 +179,7 @@ static void Gap8Task(void *param) {
       dma_flag = 0; // Clear the flag
       if(unpack()){ // process CBFPacket
         USART_DMA_ResetCounter(sizeof(CBFPacket), pk_rx.raw); // Sync with AI Deck
+        aideck_ready_flag = 1; // AI Deck is ready for more data
       }
 #ifdef AI_CBF_DEBUG
       print_u(); // Show debug info
@@ -213,11 +235,11 @@ void aideck_send_cbf_data(const cbf_qpdata_t *data){
     data_comp.u.r = (int16_t)(data->u.r*1000.0f);
 #elif CBF_TYPE_POS
     data_comp.x = (int16_t)(data->x*1000.0f);
-//    data_comp.y = (int16_t)(data->y*1000.0f);
-//    data_comp.z = (int16_t)(data->z*1000.0f);
+    data_comp.y = (int16_t)(data->y*1000.0f);
+    data_comp.z = (int16_t)(data->z*1000.0f);
     data_comp.x_dot = (int16_t)(data->x_dot*1000.0f);
-//    data_comp.y_dot = (int16_t)(data->y_dot*1000.0f);
-//    data_comp.z_dot = (int16_t)(data->z_dot*1000.0f);
+    data_comp.y_dot = (int16_t)(data->y_dot*1000.0f);
+    data_comp.z_dot = (int16_t)(data->z_dot*1000.0f);
     data_comp.u.T = (int16_t)(data->u.T*1000.0f);
     data_comp.u.phi = (int16_t)(data->u.phi*1000.0f);
     data_comp.u.theta = (int16_t)(data->u.theta*1000.0f);
@@ -225,8 +247,20 @@ void aideck_send_cbf_data(const cbf_qpdata_t *data){
 #endif
     // Pack data
     cbf_pack(sizeof(cbf_qpdata_comp_t), (uint8_t *)&data_comp);
+#ifdef AI_CBF_DEBUG
+#undef DEBUG_FMT
+#define DEBUG_FMT(fmt) fmt
+    DEBUG_PRINT("TX %c",pk_tx.header);
+    for (int j=0;j<sizeof(CBFPacket)-1;j++){
+      hex_to_char(pk_tx.data[j]);
+      DEBUG_PRINT("%c%c",hx_code[0],hx_code[1]);
+    }
+    DEBUG_PRINT("\n");
+#undef DEBUG_FMT
+#define DEBUG_FMT(fmt) DEBUG_MODULE ": " fmt
+#endif
     // Send packet
-    USART_Send(sizeof(CBFPacket), pk_tx.raw);
+    USART_DMA_Send(sizeof(CBFPacket), pk_tx.raw);
     memset(&pk_tx, 0, sizeof(CBFPacket)); // Clear packet after sending
     // AI Deck is processing the data
     aideck_ready_flag = 0;
@@ -238,6 +272,7 @@ void aideck_send_cbf_data(const cbf_qpdata_t *data){
     //DEBUG_PRINT("Missed Cycles = %d\n",missed_cycles);
 #endif
     if(missed_cycles > 200){ // Don't miss more than X cycles
+      DEBUG_PRINT("Too many missed cycles\n");
       force_stop_u();
       aideck_ready_flag = 1; // Force ready
     }
@@ -281,12 +316,12 @@ void aideck_get_safe_u(float *u_control){
 
 
 // IRQ DMA
-void __attribute__((used)) DMA1_Stream1_IRQHandler(void){
 #if defined CBF_TYPE_POS || defined CBF_TYPE_EUL
+void __attribute__((used)) DMA1_Stream1_IRQHandler(void){
   DMA_ClearFlag(DMA1_Stream1, UART3_RX_DMA_ALL_FLAGS);
   dma_flag = 1;
-#endif
 }
+#endif
 
 
 static const DeckDriver aideck_deck = {
