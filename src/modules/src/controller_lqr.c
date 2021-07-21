@@ -116,11 +116,11 @@ static void apply_cbf_eul(const state_t *state){
 static void apply_cbf_pos(const state_t *state){
   // Populate cbf_qpdata_t
   qp_data.x = state->position.x;
-//  qp_data.y = state->position.y;
-//  qp_data.z = state->position.z;
+  qp_data.y = state->position.y;
+  qp_data.z = state->position.z;
   qp_data.x_dot = state->velocity.x;
-//  qp_data.y_dot = state->velocity.y;
-//  qp_data.z_dot = state->velocity.z;
+  qp_data.y_dot = state->velocity.y;
+  qp_data.z_dot = state->velocity.z;
   qp_data.u.T = u_D6[0];
   qp_data.u.phi = u_D6[1];
   qp_data.u.theta = u_D6[2];
